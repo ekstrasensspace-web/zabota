@@ -1,0 +1,6 @@
+anthropic
+python-telegram-bot
+chromadb
+sentence-transformers
+python-docx
+pymupdf

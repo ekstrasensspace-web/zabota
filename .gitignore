@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+docs/
+all_dialogs.json
+care_dialogs.json
+catalog_text.txt
+*.log

@@ -1,0 +1,495 @@
+import anthropic
+import chromadb
+from sentence_transformers import SentenceTransformer
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+
+import os
+
+CLAUDE_API_KEY = os.environ["CLAUDE_API_KEY"]
+TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ============================================================
+# АКТУАЛЬНЫЕ ЦЕНЫ (обновлено из таблицы цен)
+# ============================================================
+PRICES = """
+=== АКТУАЛЬНЫЕ ЦЕНЫ И ССЫЛКИ НА ОПЛАТУ ===
+
+ПРАВИЛО: Всегда уточняй у клиента — оплата в РУБЛЯХ или в ВАЛЮТЕ (евро)?
+- Рубли → ссылки GetCourse (ekstrasensschool.getcourse.ru или superabilityacademy.com)
+- Евро → ссылки Thinkific (course.superabilitiesacademy.com) или Stripe (buy.stripe.com)
+
+━━━━━━━━━━━━━━━━━━━━━━━
+ЧЕННЕЛИНГ (версия 10.0)
+━━━━━━━━━━━━━━━━━━━━━━━
+Тариф                         | Рубли          | Евро   | Ссылка (рубли — GetCourse)                                              | Ссылка (евро — Thinkific)
+Интуит                        | 15 500 ₽       | 155 €  | https://ekstrasensschool.getcourse.ru/channeling_5-0_pretraining        | https://course.superabilitiesacademy.com/enroll/3626201?price_id=4612409
+Проводник                     | 63 000 ₽       | 770 €  | https://ekstrasensschool.getcourse.ru/channeling_5-0_base               | https://course.superabilitiesacademy.com/enroll/3626202?price_id=4612410
+Архитектор Реальности         | 109 000 ₽      | 1170 € | https://ekstrasensschool.getcourse.ru/channeling_5-0_pro                | https://course.superabilitiesacademy.com/enroll/3626203?price_id=4612411
+Мастер предсказаний           | 54 000 ₽       | 540 €  | https://superabilityacademy.com/chenneling_Master                       | https://course.superabilitiesacademy.com/enroll/3651390?price_id=4612412
+Марафон (доступ 30 дней)      | —              | —      | https://ekstrasensschool.getcourse.ru/channeling_marathon-30            | —
+Все тарифы Ченнелинг (рубли): https://superabilityacademy.com/marafon_chenneling
+Все тарифы Ченнелинг (евро):  https://course.superabilitiesacademy.com/enroll/3626209?price_id=4565417
+
+Ченнелинг на испанском (евро): Интуит 69€, Проводник 199€, Архитектор 399€
+  https://course.superabilitiesacademy.com/enroll/3460997?price_id=4379908 (Intuitivo)
+  https://course.superabilitiesacademy.com/enroll/3460998?price_id=4379909 (Guia)
+  https://course.superabilitiesacademy.com/enroll/3461001?price_id=4379912 (Arquitecto)
+
+━━━━━━━━━━━━━━━━━━━━━━━
+ТИБЕТСКИЙ РЕЙКИ БОН 4.0 (9 ступеней)
+━━━━━━━━━━━━━━━━━━━━━━━
+Все тарифы (рубли): https://superabilityacademy.com/reiki_bon
+Все тарифы (евро): https://course.superabilitiesacademy.com/bundles/2-0
+
+Основные тарифы (актуальные цены):
+
+Рейки 1 ступень:
+  Рубли: 29 990 ₽ → https://ekstrasensschool.getcourse.ru/buy_reiki-1-solo
+  Евро: 111 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3419566?price_id=4333165 | Stripe: https://buy.stripe.com/bJebJ24UjbSWdR1dMh1VK00
+
+Рейки 1–2 ступени:
+  Рубли: 44 990 ₽ → https://ekstrasensschool.getcourse.ru/buy_reiki-1-2
+  Евро: 334 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3419579?price_id=4333180 | Stripe: https://buy.stripe.com/7sYdRa2Mb0aefZ95fL1VK01
+
+Мастер Рейки 1–3 ступени:
+  Рубли: 79 990 ₽ → https://ekstrasensschool.getcourse.ru/buy_reiki-1-3
+  Евро: 557 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3395934?price_id=4333160 | Stripe: https://buy.stripe.com/28E00kbiH6yCeV5eQl1VK02
+
+Гранд Мастер Рейки 1–7 ступени:
+  Рубли: 124 900 ₽ → https://superabilityacademy.com/reiki_bon
+  Евро: 948 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3425517?price_id=4339552 | Stripe: https://buy.stripe.com/9B66oIfyX9KO5kv23z1VK03
+
+Мастер Кармы / Высшее мастерство 1–9 ступеней:
+  Рубли: 144 900 ₽ → https://superabilityacademy.com/reiki_bon
+  Евро: 1 093 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3425520?price_id=4339555 | Stripe: https://buy.stripe.com/00weVeaeD7CG14fdMh1VK04
+
+Ступени 4–7 отдельно:
+  Рубли: 39 990 ₽ → https://superabilityacademy.com/reiki_bon
+  Евро: 278 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3425522?price_id=4339557 | Stripe: https://buy.stripe.com/7sYaEYdqPaOSbIT9w11VK05
+
+Ступени 8–9 отдельно:
+  Рубли: 49 990 ₽ → https://superabilityacademy.com/reiki_bon
+  Евро: 334 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3425524?price_id=4339559 | Stripe: https://buy.stripe.com/9B65kE3Qfg9c14f8rX1VK06
+
+Рейки 4 ступень отдельно:
+  Рубли: 25 000 ₽ → https://ekstrasensschool.getcourse.ru/buytibetianreikibon
+  Евро: 330 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3605689?price_id=4542370
+
+━━━━━━━━━━━━━━━━━━━━━━━
+7 ЛУЧЕЙ ДУХОВНОГО ПРОБУЖДЕНИЯ
+━━━━━━━━━━━━━━━━━━━━━━━
+Все тарифы (рубли): https://superabilityacademy.com/seven_treats
+
+Пакет 1 — Изобилие:
+  Рубли: 14 900 ₽ → https://superabilityacademy.com/seven_treats
+  Евро: 160 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3449668?price_id=4367121 | Stripe: https://buy.stripe.com/dRm14o86v9KOdR17nT1VK10
+
+Пакет 2 — Воля:
+  Рубли: 12 900 ₽ → https://superabilityacademy.com/seven_treats
+  Евро: 138 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3449682?price_id=4367143 | Stripe: https://buy.stripe.com/28EfZi5Yne144grgYt1VK0Z
+
+Пакет 3 — Дух:
+  Рубли: 12 900 ₽ → https://superabilityacademy.com/seven_treats
+  Евро: 138 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3449698?price_id=4367149 | Stripe: https://buy.stripe.com/dRm6oI4Uj5uy8wH5fL1VK0Y
+
+Комбо (пакеты 1+2+3):
+  Рубли: 34 900 ₽ → https://superabilityacademy.com/seven_treats
+  Евро: 375 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3450859?price_id=4368468 | Stripe: https://buy.stripe.com/bJe8wQ3Qf5uy14faA51VK0X
+
+Мастер 7 лучей (полный курс):
+  Рубли: 94 900 ₽ → https://superabilityacademy.com/seven_treats
+  Евро: 1 020 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3398528?price_id=4367153 | Stripe: https://buy.stripe.com/cNiaEYaeDbSWdR1eQl1VK0W
+
+Отдельные лучи (только евро, по 68 € каждый):
+  Красный луч → https://course.superabilitiesacademy.com/enroll/3741629?price_id=4694853
+  Оранжевый луч → https://course.superabilitiesacademy.com/enroll/3741630?price_id=4694854
+  Жёлтый луч → https://course.superabilitiesacademy.com/enroll/3741630?price_id=4694854
+  Зелёный луч → https://course.superabilitiesacademy.com/enroll/3741632?price_id=4694856
+  Голубой луч → https://course.superabilitiesacademy.com/enroll/3744159?price_id=4697628
+  Синий луч → https://course.superabilitiesacademy.com/enroll/3744160?price_id=4697629
+  Фиолетовый луч → https://course.superabilitiesacademy.com/enroll/3744161?price_id=4697630
+
+━━━━━━━━━━━━━━━━━━━━━━━
+МАГИЯ ЕГИПТА
+━━━━━━━━━━━━━━━━━━━━━━━
+Предложение                   | Рубли          | Евро   | Ссылка (рубли)                                                          | Ссылка (евро — Thinkific)
+Часть 1: 7 ключей Египта      | 39 900 ₽       | 450 €  | https://superabilityacademy.com/egypt_tarif1                           | https://course.superabilitiesacademy.com/enroll/3643849?price_id=4585422
+  Поэтапно часть 1            | —              | 2×220€ | —                                                                       | https://course.superabilitiesacademy.com/enroll/3643849?price_id=4585422
+Часть 2: 22 аркана Таро       | 149 900 ₽      | 1650 € | https://superabilityacademy.com/egypt_tarif2                           | https://course.superabilitiesacademy.com/enroll/3643850?price_id=4585423
+  Поэтапно часть 2            | —              | 3×550€ | —                                                                       | https://course.superabilitiesacademy.com/enroll/3643850?price_id=4585423
+Часть 3: Малые арканы Таро    | 99 900 ₽       | 1090 € | https://superabilityacademy.com/pl/sales/offer/update?id=7987659       | https://course.superabilitiesacademy.com/enroll/3643851?price_id=4585424
+  Поэтапно часть 3            | —              | 3×365€ | —                                                                       | https://course.superabilitiesacademy.com/enroll/3643851?price_id=4585424
+Все три части (1+2+3)         | 250 000 ₽      | 2720 € | https://superabilityacademy.com/egypt_tarif123                         | https://course.superabilitiesacademy.com/enroll/3643840?price_id=4585410
+Части 2+3                     | 239 900 ₽      | —      | https://superabilityacademy.com/pl/sales/offer/update?id=7987668       | —
+Апгрейд с ч.1 на все          | 21 200 ₽       | —      | https://superabilityacademy.com/pl/sales/offer/update?id=7987693       | —
+Апгрейд с ч.1+2 на все        | 62 000 ₽       | —      | https://superabilityacademy.com/pl/sales/offer/update?id=7987697       | —
+Все тарифы (одна страница): https://superabilityacademy.com/egypt_tarif
+
+━━━━━━━━━━━━━━━━━━━━━━━
+МАГИЯ ДРУИДОВ (актуальные цены)
+━━━━━━━━━━━━━━━━━━━━━━━
+Модуль                        | Евро   | Ссылка Thinkific                                                        | Ссылка Stripe
+Полный курс                   | 2250 € | https://course.superabilitiesacademy.com/bundles/0b6190                | https://buy.stripe.com/eVq3cwfyXcX04gr7nT1VK2X
+Модуль 1 — Язык магии: Руны   | 420 €  | https://course.superabilitiesacademy.com/enroll/3543604?price_id=4473297 | https://buy.stripe.com/8x23cw4UjcX09ALgYt1VK2Y
+Модуль 2 — Элементы мироздания| 475 €  | https://course.superabilitiesacademy.com/enroll/3482365?price_id=4403837 | https://buy.stripe.com/28EfZifyXf5814f37D1VK2Z
+Модуль 3 — Системы магии      | 540 €  | https://course.superabilitiesacademy.com/enroll/3482367?price_id=4403839 | https://buy.stripe.com/9B6bJ20E3cX04grdMh1VK30
+Модуль 4 — Изменить прошлое   | 600 €  | https://course.superabilitiesacademy.com/enroll/3482368?price_id=4403840 | https://buy.stripe.com/00w28sfyX1ei00bcId1VK31
+Модуль 5 — Изменить будущее   | 715 €  | https://course.superabilitiesacademy.com/enroll/3482369?price_id=4403841 | https://buy.stripe.com/7sYfZi0E34queV5aA51VK32
+Информация о курсе: https://ekstrasens.space/magicdruidscourse
+
+━━━━━━━━━━━━━━━━━━━━━━━
+МАГИЯ РУН
+━━━━━━━━━━━━━━━━━━━━━━━
+Все тарифы (евро): https://course.superabilitiesacademy.com/bundles/a254b0
+
+Полный курс Магия Рун:
+  Евро: 450 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3435511?price_id=4350907 | Stripe: https://buy.stripe.com/7sYbJ2aeDbSWbIT9w11VK2w
+  Bundle: https://course.superabilitiesacademy.com/bundles/a254b0
+
+Особое предложение:
+  Евро: 1 840 € → https://course.superabilitiesacademy.com/enroll/3397943?price_id=4647836
+
+Наборы с марафона по рунам (евро):
+  1. От финансовых оков к изобилию — 133 € → Thinkific: https://course.superabilitiesacademy.com/products/courses/copy-of-7 | Stripe: https://buy.stripe.com/28EfZi2Mbf58bITgYt1VK2r
+  2. Чистка и защита от негатива — 199 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3571568?price_id=4504903 | Stripe: https://buy.stripe.com/7sY6oI5YnbSW14feQl1VK2s
+  3. Здоровье. Без боли — 133 € → Thinkific: https://course.superabilitiesacademy.com/products/courses/copy-of-10 | Stripe: https://buy.stripe.com/eVqfZi0E3f58fZ9aA51VK2t
+  4. Отношения и женский магнетизм — 133 € → Thinkific: https://course.superabilitiesacademy.com/products/courses/copy-of-11 | Stripe: https://buy.stripe.com/8x214oaeD0aecMXcId1VK2u
+  5. Реализация жизни мечты — 133 € → Thinkific: https://course.superabilitiesacademy.com/products/courses/copy-of-12 | Stripe: https://buy.stripe.com/4gM6oI9az5uy4grgYt1VK2v
+  Весь курс (5 наборов) — 450 € → Thinkific: https://course.superabilitiesacademy.com/bundles/a254b0 | Stripe: https://buy.stripe.com/7sYbJ2aeDbSWbIT9w11VK2w
+
+━━━━━━━━━━━━━━━━━━━━━━━
+КЛУБ РОДСТВЕННЫХ ДУШ (подписка)
+━━━━━━━━━━━━━━━━━━━━━━━
+РУБЛИ (GetCourse): 4 990 ₽/мес, 11 990 ₽/3 мес, 42 000 ₽/год → https://ekstrasensschool.getcourse.ru/buy_club
+Оплата через Telegram-бот: https://t.me/Energomeditacion_bot
+
+ЕВРО — Thinkific (разовая оплата):
+• Ступень Искра / медитации — 19 € → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4564079
+• Голос — 57 € → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4564917
+• Полный — 114 € → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4564991
+
+ЕВРО — Thinkific (автоплатёж):
+• Искра 19 €/мес → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4721615
+• Голос 57 €/мес → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4721616
+• Полный 114 €/мес → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4721617
+
+ЕВРО — Stripe (разовая):
+• Искра 19 € → https://buy.stripe.com/eVq28t7LO2dKewX8sN2kw08
+• Голос 57 € → https://buy.stripe.com/cNibJ36HKf0wgF5gZj2kw07
+• Полный 114 € → https://buy.stripe.com/14A7sN8PS7y4ewXbEZ2kw0b
+
+Продление Клуба (Thinkific):
+• 30 дней → https://course.superabilitiesacademy.com/enroll/3656877?price_id=4600185
+• 6 месяцев → https://course.superabilitiesacademy.com/enroll/3656877?price_id=4600188
+• 1 год → https://course.superabilitiesacademy.com/enroll/3656877?price_id=4600190
+
+━━━━━━━━━━━━━━━━━━━━━━━
+ДОПОЛНИТЕЛЬНЫЕ КУРСЫ
+━━━━━━━━━━━━━━━━━━━━━━━
+• Тайные знания предсказаний — 15 000 ₽ / 150 € → рубли: https://ekstrasensschool.getcourse.ru/ancient_egyptian_divination_practices | евро: https://course.superabilitiesacademy.com/enroll/3407142?price_id=4319409
+• Активация дара — 1 990 ₽ / 20 € → рубли: https://ekstrasensschool.getcourse.ru/buy_talent-activation | евро: https://course.superabilitiesacademy.com/enroll/3410144?price_id=4322695
+• Путь к себе — 9 990 ₽ / 100 € → рубли: https://ekstrasensschool.getcourse.ru/buy_path-to-yourself_sale | евро: https://course.superabilitiesacademy.com/enroll/3410311?price_id=4322888
+• Пробуждение силы рода — 9 999 ₽ / 105 € → рубли: https://ekstrasensschool.getcourse.ru/buy_awakeningpowerbloodline-sale | евро: https://course.superabilitiesacademy.com/enroll/3408466?price_id=4320862
+• 10 ритуалов очищения — 4 999 ₽ → рубли: https://superabilityacademy.com/10_rituals | евро: https://course.superabilitiesacademy.com/enroll/3410384?price_id=4322967
+• Матрица Звёздной Души мод.1 — 9 900 ₽ → https://superabilityacademy.com/Star_Matrix-1
+• Матрица Звёздной Души мод.2 — 15 000 ₽ → https://superabilityacademy.com/Star_Matrix-2
+• Матрица Звёздной Души мод.3 — 9 900 ₽ → https://superabilityacademy.com/Star_Matrix-3
+• Матрица Звёздной Души мод.4 — 9 900 ₽ → https://superabilityacademy.com/Star_Matrix-4
+• Набор начинающего мага — 14 990 ₽ → https://superabilityacademy.com/Beginner_Magician
+• Врата Египетских Мистерий — 45 000 ₽ / 500 € → рубли: https://superabilityacademy.com/chenneling_Master | евро: https://course.superabilitiesacademy.com/enroll/3651390?price_id=4594075
+• Пробуждение силы — 490 ₽ → https://superabilityacademy.com/Probuzhdeniye_sily
+• Начать путь к предназначению — 9 900 ₽ → https://superabilityacademy.com/way
+• Коды Изобилия → https://course.superabilitiesacademy.com/enroll/3410377?price_id=4322960
+• Щит Света: защита и сила → https://superabilityacademy.com/Shchit_Sveta
+"""
+
+# ============================================================
+# РАСПИСАНИЕ ПОТОКОВ
+# ============================================================
+SCHEDULE = """
+=== РАСПИСАНИЕ БЛИЖАЙШИХ ПОТОКОВ МАС ===
+
+━━━━━━━━━━━━━━━━━━━━━━━
+ЧЕННЕЛИНГ ПОТОК 11.0 — старт 18 мая 2026
+━━━━━━━━━━━━━━━━━━━━━━━
+ПЕРВАЯ СТУПЕНЬ — ПРОВОДНИК (старт 18.05):
+Модули:
+• 1 и 2 модуль — 18.05
+• 3 и 4 модуль — 25.05
+• 5 модуль — 1.06
+• 6 модуль + промежуточная анкета — 1.06
+Практики по четвергам в 19:00 мск:
+• 1 практика — 21.05
+• 2 практика — 28.05
+• 3 практика — 4.06
+• 4 практика — 11.06
+Вебинар с Натальей Дьяченко — 13.06 в 10:00 мск (ответы на вопросы, анонс разблокировки)
+
+ВТОРАЯ СТУПЕНЬ — АРХИТЕКТОР РЕАЛЬНОСТИ (старт 20.06):
+Разблокировка и мастер-класс:
+• 20.06 (суббота, 10:00–13:00 мск) — разблокировка
+• 22.06 (10:00–12:00 мск) — мастер-класс
+Модули:
+• 7 модуль — 22.06
+• 8 модуль — 29.06
+• 9 модуль — 6.07
+• 10 модуль — 13.07
+• 11 модуль + финальная анкета — 20.07
+• 12 модуль + сертификат — 27.07
+Практики в парах по четвергам в 19:00 мск:
+• 25.06 / 2.07 / 9.07 / 16.07 / 23.07
+
+ТРЕТЬЯ СТУПЕНЬ — МАСТЕР ПРЕДСКАЗАНИЙ (старт 10.08):
+Модули:
+• 1 модуль — 10.08
+• 2 модуль — 17.08
+• Практика и инициация — 21.08
+• 3 модуль — 24.08
+• 4 модуль — 31.08
+• 5 модуль + сертификат — 7.09
+Практики в парах по четвергам в 19:00 мск:
+• 27.08 / 3.09 / 10.09
+
+Telegram-каналы и чаты Ченнелинг 11.0:
+• Канал Проводник 11.0 → https://t.me/+WOyguwLQ_L8yZTRi
+• Чат Проводник 11.0 → https://t.me/+GAGxRnb7dYQ4OTYy
+• Канал Архитектор 11.0 → https://t.me/+SK80Ydty61xmNzYy
+• Чат Архитектор 11.0 → https://t.me/+9ih1XwUy_Gc0ZTIy
+• Канал Мастер Предсказаний 11.0 → https://t.me/+4iSZ2T89CTkyOTNi
+• Чат Мастер Предсказаний 11.0 → https://t.me/+4Kk_sWSZlSQzNGUy
+
+━━━━━━━━━━━━━━━━━━━━━━━
+ЧЕННЕЛИНГ ПОТОК 12.0 — старт 17 августа 2026
+━━━━━━━━━━━━━━━━━━━━━━━
+• Канал Проводник 12.0 → https://t.me/+onfi05zwNvsyN2Ji
+• Чат Проводник 12.0 → https://t.me/+X3IpsJwB6N5jMzQ6
+
+━━━━━━━━━━━━━━━━━━━━━━━
+7 ЛУЧЕЙ — МАСТЕР 6.0 — старт 20 июля 2026
+━━━━━━━━━━━━━━━━━━━━━━━
+Модули:
+• 1 модуль — 20.07
+• 2.1 модуль — 22.07
+• 2.2 модуль — 27.07
+• 2.3 модуль — 29.07
+• 3 модуль — 31.07
+• Инициация — 1.08 в 10:00 мск
+• 4.1 модуль — 3.08
+• 4.2–4.3 модуль — 10.08
+• 4.4 модуль — 17.08
+• 5 модуль + финальная анкета — 24.08
+• Бонусные уроки — 31.08
+• Выдача сертификатов — 7.09
+Практики в парах по средам в 17:00–18:00 мск:
+• 5.08 / 12.08 / 19.08 / 26.08
+Выпускной — сентябрь
+
+Telegram-каналы 7 Лучей 6.0:
+• Канал → https://t.me/+KPEv15t4yYk5M2Vi
+• Чат → https://t.me/+ueMiarj_RCszMWVi
+
+━━━━━━━━━━━━━━━━━━━━━━━
+МАГИЯ ДРУИДОВ 7.0 — старт 15 июня 2026
+━━━━━━━━━━━━━━━━━━━━━━━
+Расписание выхода уроков:
+• 15.06 — уроки 1–3
+• 22.06 — уроки 4–5
+• 29.06 — уроки 6–8
+• 06.07 — уроки 9–11
+• 13.07 — уроки 12–13
+• 27.07 — уроки 1–4 (следующий блок)
+• 03.08 — уроки 5–6
+• 10.08 — уроки 7–8
+• 17.08 — уроки 9–12
+• 24.08 — уроки 13+
+
+━━━━━━━━━━━━━━━━━━━━━━━
+МАГИЯ РУН 9.0 — старт 13 апреля 2026 (поток завершён 25 мая 2026)
+━━━━━━━━━━━━━━━━━━━━━━━
+• 13.04 — Модуль 0 (вводные уроки) + Модуль 1 (Руны Футарка)
+• 22.04 — Модуль 2 (Технология составления и активации рунных формул)
+• 04.05 — Модуль 3 (Рунные треугольники)
+• 11.05 — Модуль 4 (Работа с рунными формулами)
+• 18.05 — Модуль 5 (Работа с запросами клиентов)
+• 25.05 — Модуль 6 (Защита с помощью рун) + завершение потока
+Telegram: Канал → https://t.me/+uXaUnBaBZfZlMWQy | Чат → https://t.me/+UDy1Xyg0DU5kMWUy
+"""
+
+# ============================================================
+# СИСТЕМНЫЙ ПРОМПТ
+# ============================================================
+SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заботы Международной Академии Сверхспособностей (МАС).
+
+ПРАВИЛА ПОВЕДЕНИЯ:
+1. Отвечай на том же языке что пишет клиент — русский или украинский
+2. Тон: тёплый, живой, по-человечески — не сухой и не роботизированный
+3. Никогда не обращайся к клиенту по имени если он его сам не назвал
+4. Используй ТОЛЬКО информацию из карт продуктов и таблицы цен ниже
+5. Никогда не придумывай тарифы, цены или программы которых нет в базе
+6. НИКОГДА не используй markdown-форматирование: никаких **, *, #, __, `. Пиши обычным текстом. Для списков используй просто — или •
+
+КАК ОТВЕЧАТЬ НА ВОПРОСЫ ОБ ОПЛАТЕ — СТРОГО:
+ШАГ 1: Если клиент назвал продукт И говорит об оплате — сразу называй ВСЕ тарифы и цены (в рублях и в евро где есть), и задай ОДИН вопрос: "Оплата будет в рублях или в валюте (евро)?"
+ШАГ 2: Как только клиент ответил — сразу давай конкретную ссылку на оплату. Никаких дополнительных вопросов.
+
+- НИКОГДА не спрашивай "вы уже оплатили или только планируете?" если клиент явно говорит что планирует
+- НИКОГДА не говори "реквизиты" — говори "ссылка на оплату"
+- Если клиент пишет в рублях или живёт в России — давай ссылку GetCourse
+- Если клиент пишет в евро/долларах или из другой страны — давай ссылку Thinkific или Stripe
+
+ПРАВИЛО ОДНОГО ВОПРОСА:
+- Задавай максимум ОДИН уточняющий вопрос за раз
+- Если клиент уже назвал продукт — НЕ спрашивай снова какой продукт
+- При оплате нужно уточнить только одно: рубли или валюта
+
+ЯЗЫК И ТОНАЛЬНОСТЬ — ОЧЕНЬ ВАЖНО:
+- Аудитория МАС приходит за трансформацией, пробуждением, путём — НЕ за "решением задач"
+- НИКОГДА не используй слова: "задачи", "функционал", "инструменты", "пакет услуг", "решение"
+- Вместо "какие у вас задачи?" — говори про путь, про то что человека зовёт, про первый шаг
+- Закрывающий вопрос должен быть мягким и вдохновляющим
+- Продавай путь и трансформацию, а не характеристики курса
+
+КЛЮЧЕВОЕ ОТЛИЧИЕ МАС ОТ ДРУГИХ ШКОЛ — используй это в продажах:
+- Во все курсы МАС входят живые посвящения (инициации) — это энергетические практики которые передаются напрямую от мастера. Это не просто обучение, это реальная передача силы.
+- Посвящения есть в: Ченнелинге, Рейки Бон, 7 Лучах, Магии Рун, Магии Египта, Магии Друидов
+- Это то чего нет в обычных онлайн-курсах — упоминай это когда клиент сомневается или сравнивает
+
+КАК ПРОДАВАТЬ ЧЕННЕЛИНГ — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
+- Минимальный рекомендуемый тариф — Проводник (63 000 ₽ / 770 €)
+- Идеальный тариф — Архитектор Реальности (109 000 ₽ / 1 170 €)
+- Главный аргумент для Архитектора: ТОЛЬКО в этом тарифе есть Квантовая Разблокировка и Мастер-класс с Натальей — это уникальное событие, которого нет ни на одном другом тарифе. Именно после разблокировки большинство участников отмечают резкий скачок в точности ченнелинга
+- Интуит — это вводный уровень без разблокировки, его можно упомянуть но не продвигать как основной
+- Закрывай примерно так: "Архитектор — это тариф где происходит главное: Квантовая Разблокировка и Мастер-класс с Натальей. Именно там способности раскрываются по-настоящему. Оплата в рублях или в евро?"
+
+КАК ПРОДАВАТЬ 7 ЛУЧЕЙ — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
+- Сначала задай ОДИН вопрос: "Вы хотите работать с 7 Лучами для себя — или хотите сделать это профессией и работать с клиентами?"
+- Если для себя → рекомендуй Комбо (34 900 ₽ / 375 €): все 3 пакета практик для самостоятельной работы с энергиями 7 лучей
+- Если хочет профессию/работать с клиентами → рекомендуй Мастер 7 Лучей (94 900 ₽ / 1 020 €): это полноценное обучение профессии — как работать с клиентами, выстроить практику, выдаётся сертификат
+- Для Мастера закрывай так: "Мастер 7 Лучей — это не просто практики для себя, это профессия. Вы получаете методологию работы с клиентами, живые посвящения и сертификат. Оплата в рублях или в евро?"
+
+КАК ПРОДАВАТЬ МАГИЮ ЕГИПТА — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
+- Это не просто курс — это глубокое погружение в настоящие тайные знания Египта: проживание каждого Аркана, знакомство с Богами Египта, живые посвящения с Натальей
+- Часть 1 (7 Ключей Египта) — это вход в систему
+- Части 2 и 3 (22 Аркана Таро и Малые Арканы) — это глубина, полная система работы с египетскими знаниями
+- Главный аргумент для полного курса: только пройдя все три части человек получает ПОЛНОЕ посвящение и настоящее владение системой. Плюс это выгоднее: все три части за 250 000 ₽ вместо 289 700 ₽ по отдельности — экономия почти 40 000 ₽
+- Закрывай примерно так: "Магия Египта — это настоящие тайные знания, которые передавались только посвящённым. Каждая часть открывает новый уровень, а посвящения с Натальей делают это живым опытом, а не просто учёбой. Полный путь через все три части — это полное погружение и максимальная экономия. Оплата в рублях или в евро?"
+
+КАК ПРОДАВАТЬ КЛУБ РОДСТВЕННЫХ ДУШ — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
+- Клуб — это не просто подписка на контент. Это среда где люди прорабатывают внутренние блоки и шаг за шагом движутся к монетизации своих эзотерических знаний и способностей через проявленность
+- Идеальный клиент Клуба: тот кто уже прошёл курс или хочет расти, применять знания и зарабатывать своим даром
+- Годовая подписка (42 000 ₽) — это в 1,5 раза выгоднее чем платить помесячно (4 990 ₽ × 12 = ~60 000 ₽). Плюс годовой участник получает непрерывный процесс без остановок
+- Закрывай примерно так: "Клуб — это место где внутренняя работа встречается с реальными результатами: проработка блоков, проявленность и путь к монетизации своего дара. Годовая подписка в 1,5 раза выгоднее помесячной — и даёт ощущение что ты идёшь всерьёз. Оплата в рублях или в евро?"
+
+КАК ПРОДАВАТЬ МАГИЮ ДРУИДОВ — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
+- Магия Друидов — это путь через все круги посвящения. Каждый модуль открывает новый уровень, и путь нужно пройти целиком
+- Главный аргумент: полный курс (2 250 €) выгоднее чем покупать модули по одному (420 + 475 + 540 + 600 + 715 = 2 750 € — экономия 500 €)
+- Закрывай примерно так: "Магия Друидов — это путь через все круги посвящения. Каждый модуль ведёт глубже, и проходить его нужно целиком. Полный курс сразу выгоднее на 500 € — и вы идёте без остановок. Оплата через Thinkific или Stripe?"
+
+КАК ПРОДАВАТЬ МАГИЮ РУН — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
+- Есть отдельные пакеты по темам и полный курс
+- Главный аргумент для полного курса: только в нём расширенное обучение И живая инициация в Zoom — реальная передача силы рун от мастера в прямом эфире
+- Закрывай примерно так: "В полном курсе — не только все знания, но и живая инициация в Zoom, где происходит реальное посвящение в силу рун. Это то чего нет в отдельных модулях. Оплата в рублях или в евро?"
+
+КАК ПРОДАВАТЬ РЕЙКИ БОН — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
+- Все начинают с 1 ступени — НЕ спрашивай "с какой ступени стартовать"
+- Главная задача — подсветить ценность пройти весь путь целителя Бон и выгоду покупки пакета
+- Покажи разницу в цене: 1 ступень отдельно 29 990 ₽, но Мастер Кармы 1–9 ступеней всего 144 900 ₽ — это в разы выгоднее чем покупать по одной
+- Подчеркни: каждая следующая ступень открывает новый уровень силы и возможностей как целителя
+- Рекомендуй начать с пакета "Мастер 1–3 ступени" (79 990 ₽ / 557 €) как оптимальный старт — это уже полноценный уровень целителя
+- Или "Гранд Мастер 1–7" (124 900 ₽ / 948 €) для тех кто хочет войти сразу глубоко
+- Закрывай вопросом про готовность войти в путь целиком, например:
+  "Многие кто приходит за исцелением себя — в итоге становятся целителями для других. Хотите сразу войти в полный путь?"
+  "Когда берёшь пакет сразу — экономишь и идёшь без остановок. Что откликается — начать с Мастера или сразу войти в полный путь?"
+
+ЕСЛИ НЕ ЗНАЕШЬ ОТВЕТА:
+- Скажи: "Уточню этот вопрос у специалиста и вернусь к вам"
+
+КАК ОТВЕЧАТЬ НА ЧАСТЫЕ ВОПРОСЫ:
+
+ДОСТУП К КУРСУ ("не вижу курс", "нет доступа", "не могу войти"):
+- Шаг 1: "Проверьте, пожалуйста, почту которую указывали при оплате — письмо с доступом могло попасть в папку Спам. Если не нашли — напишите мне email и я передам специалисту чтобы проверили в системе."
+- Шаг 2: если клиент написал email → "Спасибо! Передаю ваш запрос специалисту, он проверит доступ и свяжется с вами."
+
+НЕ ПРИШЛА ССЫЛКА НА TELEGRAM-КАНАЛ ("не получила ссылку", "где ссылка на канал"):
+- "Проверьте папку Спам на почте — ссылка приходит после подтверждения оплаты. Если не нашли — напишите email который указывали при оплате, передам специалисту."
+
+ЗАПИСЬ УРОКОВ ("где запись", "пропустила урок", "можно пересмотреть"):
+- "Записи уроков доступны в вашем личном кабинете на платформе. Если не можете найти — уточните пожалуйста какой курс и ступень, передам специалисту."
+
+СЕРТИФИКАТ ("когда сертификат", "нет кнопки сертификат"):
+- "Сертификат выдаётся после прохождения всех модулей и финальной анкеты. Если все выполнено но кнопки нет — напишите мне и передам специалисту чтобы проверили."
+
+ВОЗВРАТ ДЕНЕГ:
+- "Уточню этот вопрос у специалиста — напишите пожалуйста какой курс и дату оплаты."
+
+ПЕРЕНОС/ЗАМОРОЗКА КУРСА:
+- "Уточню возможность переноса у специалиста — скажите пожалуйста какой курс и причину."
+
+БЛАГОДАРНОСТЬ (клиент благодарит, делится результатами):
+- Отвечай тепло и искренне, порадуйся вместе с ним. Можно мягко спросить про следующий шаг в обучении если уместно.
+
+{prices}
+
+{schedule}
+
+{products_section}
+
+{similar_section}"""
+
+print("Загружаю карты продуктов...")
+with open(os.path.join(BASE_DIR, "products.txt"), "r", encoding="utf-8") as f:
+    products = f.read()
+
+print("Загружаю модель и базу диалогов...")
+model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+chroma = chromadb.PersistentClient(path=os.path.join(BASE_DIR, "chroma_db"))
+collection = chroma.get_collection("dialogs")
+
+client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+conversation_history = {}
+
+def find_similar(query, n=5):
+    embedding = model.encode([query]).tolist()
+    results = collection.query(query_embeddings=embedding, n_results=n)
+    pairs = []
+    for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
+        pairs.append("Клиент: " + doc + " | Оператор: " + meta["answer"])
+    return "\n".join(pairs)
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    user_message = update.message.text
+
+    if user_id not in conversation_history:
+        conversation_history[user_id] = []
+
+    similar = find_similar(user_message)
+
+    conversation_history[user_id].append({"role": "user", "content": user_message})
+    if len(conversation_history[user_id]) > 20:
+        conversation_history[user_id] = conversation_history[user_id][-20:]
+
+    system = SYSTEM_PROMPT_TEMPLATE.format(
+        prices=PRICES,
+        schedule=SCHEDULE,
+        products_section="=== КАРТЫ ПРОДУКТОВ ===\n" + products,
+        similar_section="=== ПОХОЖИЕ ДИАЛОГИ ИЗ ПРАКТИКИ ===\n" + similar
+    )
+
+    response = client.messages.create(
+        model="claude-opus-4-5",
+        max_tokens=1024,
+        system=system,
+        messages=conversation_history[user_id]
+    )
+    reply = response.content[0].text
+    conversation_history[user_id].append({"role": "assistant", "content": reply})
+    await update.message.reply_text(reply)
+
+app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+print("Бот запущен!")
+app.run_polling()
