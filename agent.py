@@ -573,10 +573,26 @@ print("Запуск без RAG (экономия памяти)")
 ADMIN_CHAT_ID = 430615810       # личный чат — для команд /takeover /release
 LOG_CHANNEL_ID = -5086804302   # канал — сюда идут все диалоги
 
+USERS_FILE = os.path.join(BASE_DIR, "users.txt")
+
+def load_known_users():
+    """Загружаем список уникальных пользователей из файла."""
+    if not os.path.exists(USERS_FILE):
+        return set()
+    with open(USERS_FILE, "r") as f:
+        return set(line.strip() for line in f if line.strip())
+
+def save_user(user_id):
+    """Добавляем нового пользователя в файл (если ещё не был)."""
+    with open(USERS_FILE, "a") as f:
+        f.write(str(user_id) + "\n")
+
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 conversation_history = {}
 paused_users = set()        # пользователи на ручном управлении
 forwarded_map = {}          # message_id пересланного сообщения → user_id клиента
+known_users = load_known_users()
+print(f"Известных пользователей: {len(known_users)}")
 
 def find_similar(query, n=3):
     if model is None or collection is None:
@@ -644,6 +660,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 paused_users.discard(tid)
                 await update.message.reply_text(f"✅ Бот снова отвечает пользователю {tid}.")
             return
+        # /stats — сколько всего уникальных пользователей
+        if user_message.startswith("/stats"):
+            total = len(known_users)
+            active = len(conversation_history)
+            manual = len(paused_users)
+            await update.message.reply_text(
+                f"📊 Статистика бота:\n\n"
+                f"👥 Всего уникальных пользователей: {total}\n"
+                f"💬 Активных диалогов сейчас: {active}\n"
+                f"🤝 На ручном управлении: {manual}"
+            )
+            return
+
         # /list — показать кто на ручном управлении
         if user_message.startswith("/list"):
             if paused_users:
@@ -662,6 +691,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return  # прочие сообщения от админа игнорируем
 
     # ── Сообщения от клиентов ─────────────────────────────────────────────────
+    # Фиксируем нового пользователя
+    user_id_str = str(user_id)
+    if user_id_str not in known_users:
+        known_users.add(user_id_str)
+        save_user(user_id)
+
     # Если диалог на ручном управлении — только пересылаем админу
     if user_id in paused_users:
         await notify_admin(context, user_id, user_name, user_message, bot_reply=None)
