@@ -670,8 +670,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass  # не ломаем бота если уведомление не дошло
 
+from telegram.ext import filters as tg_filters
+
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-app.add_handler(MessageHandler(filters.ALL, handle_any_update))
+app.add_handler(MessageHandler(tg_filters.UpdateType.CHANNEL_POSTS, handle_any_update))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 print("Бот запущен!")
 app.run_polling()
