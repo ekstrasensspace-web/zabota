@@ -524,8 +524,12 @@ model = None
 collection = None
 print("Запуск без RAG (экономия памяти)")
 
+ADMIN_CHAT_ID = 430615810
+
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 conversation_history = {}
+paused_users = set()        # пользователи на ручном управлении
+forwarded_map = {}          # message_id пересланного сообщения → user_id клиента
 
 def find_similar(query, n=3):
     if model is None or collection is None:
@@ -540,15 +544,74 @@ def find_similar(query, n=3):
     except Exception:
         return ""
 
+async def notify_admin(context, user_id, user_name, user_message, bot_reply=None):
+    """Отправляет диалог в чат администратора."""
+    if bot_reply:
+        text = (
+            f"👤 {user_name} ({user_id}):\n{user_message}\n\n"
+            f"🤖 Бот:\n{bot_reply}\n\n"
+            f"Чтобы взять диалог: /takeover {user_id}"
+        )
+    else:
+        text = (
+            f"👤 {user_name} ({user_id}) [ручное управление]:\n{user_message}\n\n"
+            f"Ответьте на это сообщение чтобы написать клиенту.\n"
+            f"Вернуть боту: /release {user_id}"
+        )
+    sent = await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
+    forwarded_map[sent.message_id] = user_id
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_message = update.message.text
+    user_name = update.message.from_user.first_name or str(user_id)
 
+    # ── Сообщения от администратора ──────────────────────────────────────────
+    if user_id == ADMIN_CHAT_ID:
+        # /takeover USER_ID — взять диалог вручную
+        if user_message.startswith("/takeover"):
+            parts = user_message.split()
+            if len(parts) > 1:
+                tid = int(parts[1])
+                paused_users.add(tid)
+                await update.message.reply_text(f"✅ Взяла управление для {tid}. Бот молчит.")
+            return
+        # /release USER_ID — вернуть боту
+        if user_message.startswith("/release"):
+            parts = user_message.split()
+            if len(parts) > 1:
+                tid = int(parts[1])
+                paused_users.discard(tid)
+                await update.message.reply_text(f"✅ Бот снова отвечает пользователю {tid}.")
+            return
+        # /list — показать кто на ручном управлении
+        if user_message.startswith("/list"):
+            if paused_users:
+                await update.message.reply_text("На ручном управлении: " + ", ".join(str(x) for x in paused_users))
+            else:
+                await update.message.reply_text("Все диалоги ведёт бот.")
+            return
+        # Ответ на пересланное сообщение → отправить клиенту
+        if update.message.reply_to_message:
+            orig_id = update.message.reply_to_message.message_id
+            if orig_id in forwarded_map:
+                client_id = forwarded_map[orig_id]
+                await context.bot.send_message(chat_id=client_id, text=user_message)
+                await update.message.reply_text(f"✅ Отправлено клиенту {client_id}.")
+                return
+        return  # прочие сообщения от админа игнорируем
+
+    # ── Сообщения от клиентов ─────────────────────────────────────────────────
+    # Если диалог на ручном управлении — только пересылаем админу
+    if user_id in paused_users:
+        await notify_admin(context, user_id, user_name, user_message, bot_reply=None)
+        return
+
+    # Обычный режим — отвечает бот
     if user_id not in conversation_history:
         conversation_history[user_id] = []
 
     similar = find_similar(user_message)
-
     conversation_history[user_id].append({"role": "user", "content": user_message})
     if len(conversation_history[user_id]) > 20:
         conversation_history[user_id] = conversation_history[user_id][-20:]
@@ -569,6 +632,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = response.content[0].text
     conversation_history[user_id].append({"role": "assistant", "content": reply})
     await update.message.reply_text(reply)
+
+    # Пересылаем диалог администратору
+    try:
+        await notify_admin(context, user_id, user_name, user_message, bot_reply=reply)
+    except Exception:
+        pass  # не ломаем бота если уведомление не дошло
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
