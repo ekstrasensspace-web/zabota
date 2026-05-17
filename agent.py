@@ -584,6 +584,13 @@ async def notify_admin(context, user_id, user_name, user_message, bot_reply=None
     sent = await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
     forwarded_map[sent.message_id] = user_id
 
+async def handle_any_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Временный обработчик для определения ID канала."""
+    if update.channel_post:
+        print(f"CHANNEL ID: {update.channel_post.chat.id} | {update.channel_post.chat.title}")
+    elif update.message:
+        print(f"CHAT ID: {update.message.chat.id} | {update.message.chat.type}")
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_message = update.message.text
@@ -664,6 +671,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass  # не ломаем бота если уведомление не дошло
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+app.add_handler(MessageHandler(filters.ALL, handle_any_update))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 print("Бот запущен!")
 app.run_polling()
