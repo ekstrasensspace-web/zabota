@@ -1,6 +1,6 @@
-anthropic
-python-telegram-bot
-chromadb
-sentence-transformers
+anthropic==0.102.0
+python-telegram-bot==22.7
+chromadb==1.5.9
+sentence-transformers==5.5.0
 python-docx
 pymupdf

@@ -516,11 +516,19 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 print("Загружаю карты продуктов...")
 with open(os.path.join(BASE_DIR, "products.txt"), "r", encoding="utf-8") as f:
     products = f.read()
+print(f"products.txt загружен, {len(products)} символов")
 
-print("Загружаю модель и базу диалогов...")
+print("Загружаю sentence-transformer модель...")
 model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+print("Модель загружена")
+
+print("Подключаюсь к ChromaDB...")
 chroma = chromadb.PersistentClient(path=os.path.join(BASE_DIR, "chroma_db"))
+print("ChromaDB подключена")
+
+print("Получаю коллекцию диалогов...")
 collection = chroma.get_collection("dialogs")
+print(f"Коллекция загружена, {collection.count()} записей")
 
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 conversation_history = {}
