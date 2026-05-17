@@ -199,20 +199,47 @@ PRICES = """
 • 1 год → https://course.superabilitiesacademy.com/enroll/3656877?price_id=4600190
 
 ━━━━━━━━━━━━━━━━━━━━━━━
+ПУТЬ НАЧИНАЮЩЕГО (5 шагов + набор)
+━━━━━━━━━━━━━━━━━━━━━━━
+Это последовательный путь для тех кто только открывает свои способности.
+
+Шаг 1 — Пробуждение силы — 490 ₽
+Для тех кто боится своих способностей ("а вдруг я схожу с ума"). Медитация даёт различение: где дар, а где болезнь. Безопасность в способностях, открытие дара.
+Ссылка: https://superabilityacademy.com/Probuzhdeniye_sily
+
+Шаг 2 — Активация дара — 1 990 ₽ / 20 €
+Тест на тип способностей, дневник развития, практики на раскрытие третьего глаза, сканирование пространства, внутренний компас, защита.
+Рубли: https://ekstrasensschool.getcourse.ru/buy_talent-activation
+Евро: https://course.superabilitiesacademy.com/enroll/3410144?price_id=4322695
+
+Шаг 3 — Щит Света: защита и сила — 1 990 ₽
+Рунические талисманы, ритуал на создание стихийного круга для защиты и силы.
+Ссылка: https://superabilityacademy.com/Shchit_Sveta
+
+Шаг 4 — 10 мощных ритуалов очищения — 4 999 ₽
+Очищение кармы, страхов, магических воздействий, сущностей, зависимостей. Пространственная реализация желаний.
+Рубли: https://superabilityacademy.com/10_rituals
+Евро: https://course.superabilitiesacademy.com/enroll/3410384?price_id=4322967
+
+Шаг 5 — Начать путь к предназначению — 9 900 ₽
+6 медитаций: Хроники Акаши, духовный род, самое сильное воплощение, душевная матрица, уникальный дар миру, путь раскрытия потенциала.
+Ссылка: https://superabilityacademy.com/way
+
+НАБОР НАЧИНАЮЩЕГО МАГА (все 5 шагов вместе) — 14 990 ₽
+Экономия: по отдельности 19 369 ₽ — вместе 14 990 ₽.
+Ссылка: https://superabilityacademy.com/Beginner_Magician
+
+━━━━━━━━━━━━━━━━━━━━━━━
 ДОПОЛНИТЕЛЬНЫЕ КУРСЫ
 ━━━━━━━━━━━━━━━━━━━━━━━
 • Тайные знания предсказаний — 15 000 ₽ / 150 € → рубли: https://ekstrasensschool.getcourse.ru/ancient_egyptian_divination_practices | евро: https://course.superabilitiesacademy.com/enroll/3407142?price_id=4319409
-• Активация дара — 1 990 ₽ / 20 € → рубли: https://ekstrasensschool.getcourse.ru/buy_talent-activation | евро: https://course.superabilitiesacademy.com/enroll/3410144?price_id=4322695
 • Путь к себе — 9 990 ₽ / 100 € → рубли: https://ekstrasensschool.getcourse.ru/buy_path-to-yourself_sale | евро: https://course.superabilitiesacademy.com/enroll/3410311?price_id=4322888
 • Пробуждение силы рода — 9 999 ₽ / 105 € → рубли: https://ekstrasensschool.getcourse.ru/buy_awakeningpowerbloodline-sale | евро: https://course.superabilitiesacademy.com/enroll/3408466?price_id=4320862
-• 10 ритуалов очищения — 4 999 ₽ → рубли: https://superabilityacademy.com/10_rituals | евро: https://course.superabilitiesacademy.com/enroll/3410384?price_id=4322967
 • Матрица Звёздной Души мод.1 — 9 900 ₽ → https://superabilityacademy.com/Star_Matrix-1
 • Матрица Звёздной Души мод.2 — 15 000 ₽ → https://superabilityacademy.com/Star_Matrix-2
 • Матрица Звёздной Души мод.3 — 9 900 ₽ → https://superabilityacademy.com/Star_Matrix-3
 • Матрица Звёздной Души мод.4 — 9 900 ₽ → https://superabilityacademy.com/Star_Matrix-4
-• Набор начинающего мага — 14 990 ₽ → https://superabilityacademy.com/Beginner_Magician
 • Врата Египетских Мистерий — 45 000 ₽ / 500 € → рубли: https://superabilityacademy.com/chenneling_Master | евро: https://course.superabilitiesacademy.com/enroll/3651390?price_id=4594075
-• Пробуждение силы — 490 ₽ → https://superabilityacademy.com/Probuzhdeniye_sily
 • Начать путь к предназначению — 9 900 ₽ → https://superabilityacademy.com/way
 • Коды Изобилия → https://course.superabilitiesacademy.com/enroll/3410377?price_id=4322960
 • Щит Света: защита и сила → https://superabilityacademy.com/Shchit_Sveta
@@ -415,6 +442,12 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 - Закрывай вопросом про готовность войти в путь целиком, например:
   "Многие кто приходит за исцелением себя — в итоге становятся целителями для других. Хотите сразу войти в полный путь?"
   "Когда берёшь пакет сразу — экономишь и идёшь без остановок. Что откликается — начать с Мастера или сразу войти в полный путь?"
+
+КАК ПРОДАВАТЬ ПУТЬ НАЧИНАЮЩЕГО — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
+Когда клиент говорит "не знаю с чего начать", "хочу попробовать", "боюсь что не смогу", "только начинаю", "интересуюсь способностями" — предлагай Путь начинающего.
+- Главный аргумент для набора: все 5 шагов вместе стоят 14 990 ₽ вместо 19 369 ₽ по отдельности — экономия более 4 000 ₽
+- Закрывай примерно так: "Есть специальный путь для тех кто только открывает свои способности — 5 шагов от первого знакомства с даром до понимания своего предназначения. Можно брать по одному, но в наборе выгоднее — 14 990 ₽ вместо 19 000 ₽. С чего хотите начать?"
+- Шаг 1 (490 ₽) — идеальный первый шаг для тех кто сомневается или боится
 
 ЕСЛИ НЕ ЗНАЕШЬ ОТВЕТА:
 - Скажи: "Уточню этот вопрос у специалиста и вернусь к вам"
