@@ -547,7 +547,8 @@ model = None
 collection = None
 print("Запуск без RAG (экономия памяти)")
 
-ADMIN_CHAT_ID = 430615810
+ADMIN_CHAT_ID = 430615810       # личный чат — для команд /takeover /release
+LOG_CHANNEL_ID = -5086804302   # канал — сюда идут все диалоги
 
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 conversation_history = {}
@@ -568,28 +569,25 @@ def find_similar(query, n=3):
         return ""
 
 async def notify_admin(context, user_id, user_name, user_message, bot_reply=None):
-    """Отправляет диалог в чат администратора."""
+    """Отправляет диалог в канал мониторинга."""
     if bot_reply:
         text = (
             f"👤 {user_name} ({user_id}):\n{user_message}\n\n"
             f"🤖 Бот:\n{bot_reply}\n\n"
-            f"Чтобы взять диалог: /takeover {user_id}"
+            f"Взять диалог: /takeover {user_id}"
         )
     else:
         text = (
             f"👤 {user_name} ({user_id}) [ручное управление]:\n{user_message}\n\n"
-            f"Ответьте на это сообщение чтобы написать клиенту.\n"
             f"Вернуть боту: /release {user_id}"
         )
-    sent = await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
-    forwarded_map[sent.message_id] = user_id
+    # Отправляем в канал мониторинга
+    await context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=text)
+    # Для ручного управления — дублируем в личку чтобы можно было ответить
+    if not bot_reply:
+        sent = await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
+        forwarded_map[sent.message_id] = user_id
 
-async def handle_any_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Временный обработчик для определения ID канала."""
-    if update.channel_post:
-        print(f"CHANNEL ID: {update.channel_post.chat.id} | {update.channel_post.chat.title}")
-    elif update.message:
-        print(f"CHAT ID: {update.message.chat.id} | {update.message.chat.type}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
@@ -673,7 +671,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 from telegram.ext import filters as tg_filters
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-app.add_handler(MessageHandler(tg_filters.UpdateType.CHANNEL_POSTS, handle_any_update))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 print("Бот запущен!")
-app.run_polling(allowed_updates=["message", "channel_post", "edited_channel_post"])
+app.run_polling()
