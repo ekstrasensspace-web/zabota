@@ -1,6 +1,4 @@
 import anthropic
-import chromadb
-from sentence_transformers import SentenceTransformer
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
@@ -520,21 +518,11 @@ with open(os.path.join(BASE_DIR, "products.txt"), "r", encoding="utf-8") as f:
     products = f.read()
 print(f"products.txt загружен, {len(products)} символов")
 
-# RAG (похожие диалоги) — грузим если хватает памяти, иначе работаем без него
+# RAG отключён для экономии памяти на Railway
+# Бот работает только на системном промпте (цены, скрипты, расписание)
 model = None
 collection = None
-try:
-    print("Загружаю sentence-transformer модель...")
-    model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-    print("Модель загружена, подключаюсь к ChromaDB...")
-    chroma = chromadb.PersistentClient(path=os.path.join(BASE_DIR, "chroma_db"))
-    collection = chroma.get_collection("dialogs")
-    print(f"RAG готов: {collection.count()} диалогов")
-    gc.collect()
-except Exception as e:
-    print(f"RAG не загружен ({e}) — работаем без похожих диалогов")
-    model = None
-    collection = None
+print("Запуск без RAG (экономия памяти)")
 
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 conversation_history = {}
