@@ -1,6 +1,6 @@
 import anthropic
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
 import os
 
@@ -589,6 +589,15 @@ async def notify_admin(context, user_id, user_name, user_message, bot_reply=None
         forwarded_map[sent.message_id] = user_id
 
 
+async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id == ADMIN_CHAT_ID:
+        return
+    await update.message.reply_text(
+        "Вас приветствует служба заботы Международной Академии Сверхспособностей 🌟\n\n"
+        "Задайте ваш вопрос — я отвечу."
+    )
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_message = update.message.text
@@ -671,6 +680,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 from telegram.ext import filters as tg_filters
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+app.add_handler(CommandHandler("start", handle_start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 print("Бот запущен!")
 app.run_polling()
