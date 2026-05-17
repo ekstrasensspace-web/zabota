@@ -520,29 +520,37 @@ with open(os.path.join(BASE_DIR, "products.txt"), "r", encoding="utf-8") as f:
     products = f.read()
 print(f"products.txt загружен, {len(products)} символов")
 
-print("Загружаю sentence-transformer модель...")
-model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-print("Модель загружена")
-
-print("Подключаюсь к ChromaDB...")
-chroma = chromadb.PersistentClient(path=os.path.join(BASE_DIR, "chroma_db"))
-collection = chroma.get_collection("dialogs")
-print(f"ChromaDB подключена, {collection.count()} записей")
-
-# Освобождаем кэш после инициализации
-gc.collect()
-print("Инициализация завершена, память очищена")
+# RAG (похожие диалоги) — грузим если хватает памяти, иначе работаем без него
+model = None
+collection = None
+try:
+    print("Загружаю sentence-transformer модель...")
+    model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+    print("Модель загружена, подключаюсь к ChromaDB...")
+    chroma = chromadb.PersistentClient(path=os.path.join(BASE_DIR, "chroma_db"))
+    collection = chroma.get_collection("dialogs")
+    print(f"RAG готов: {collection.count()} диалогов")
+    gc.collect()
+except Exception as e:
+    print(f"RAG не загружен ({e}) — работаем без похожих диалогов")
+    model = None
+    collection = None
 
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 conversation_history = {}
 
 def find_similar(query, n=3):
-    embedding = model.encode([query]).tolist()
-    results = collection.query(query_embeddings=embedding, n_results=n)
-    pairs = []
-    for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
-        pairs.append("Клиент: " + doc + " | Оператор: " + meta["answer"])
-    return "\n".join(pairs)
+    if model is None or collection is None:
+        return ""
+    try:
+        embedding = model.encode([query]).tolist()
+        results = collection.query(query_embeddings=embedding, n_results=n)
+        pairs = []
+        for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
+            pairs.append("Клиент: " + doc + " | Оператор: " + meta["answer"])
+        return "\n".join(pairs)
+    except Exception:
+        return ""
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
