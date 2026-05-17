@@ -51,44 +51,34 @@ PRICES = """
   https://course.superabilitiesacademy.com/enroll/3461001?price_id=4379912 (Arquitecto)
 
 ━━━━━━━━━━━━━━━━━━━━━━━
-ТИБЕТСКИЙ РЕЙКИ БОН 4.0 (9 ступеней)
+ТИБЕТСКИЙ РЕЙКИ БОН (9 уровней/модулей)
 ━━━━━━━━━━━━━━━━━━━━━━━
-Все тарифы (рубли): https://superabilityacademy.com/reiki_bon
+Все тарифы: https://superabilityacademy.com/reiki_bon
 Все тарифы (евро): https://course.superabilitiesacademy.com/bundles/2-0
 
-Основные тарифы (актуальные цены):
+ОТДЕЛЬНЫЕ УРОВНИ (рубли):
+  Уровень 1 — 15 000 ₽
+  Уровень 2 — 25 000 ₽
+  Уровень 3 — 35 000 ₽
+  Уровень 4 — 30 000 ₽
+  Уровень 5 — 30 000 ₽
+  Уровень 6 — 30 000 ₽
+  Уровень 7 — 30 000 ₽
+  Уровень 8 — 35 000 ₽
+  Уровень 9 — 35 000 ₽
 
-Рейки 1 ступень:
-  Рубли: 29 990 ₽ → https://ekstrasensschool.getcourse.ru/buy_reiki-1-solo
-  Евро: 111 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3419566?price_id=4333165 | Stripe: https://buy.stripe.com/bJebJ24UjbSWdR1dMh1VK00
+ПАКЕТЫ (рубли — выгоднее чем по отдельности):
+  Уровни 1–3 вместе — 65 000 ₽ (по отдельности 75 000 ₽, экономия 10 000 ₽)
+  Уровни 4–7 вместе — 90 000 ₽ (по отдельности 120 000 ₽, экономия 30 000 ₽)
+  Уровни 8–9 вместе — 60 000 ₽ (по отдельности 70 000 ₽, экономия 10 000 ₽)
+  Полный курс 1–9 — 190 000 ₽ (по отдельности 265 000 ₽, экономия 75 000 ₽!)
 
-Рейки 1–2 ступени:
-  Рубли: 44 990 ₽ → https://ekstrasensschool.getcourse.ru/buy_reiki-1-2
-  Евро: 334 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3419579?price_id=4333180 | Stripe: https://buy.stripe.com/7sYdRa2Mb0aefZ95fL1VK01
+Все ссылки на оплату: https://superabilityacademy.com/reiki_bon
 
-Мастер Рейки 1–3 ступени:
-  Рубли: 79 990 ₽ → https://ekstrasensschool.getcourse.ru/buy_reiki-1-3
-  Евро: 557 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3395934?price_id=4333160 | Stripe: https://buy.stripe.com/28E00kbiH6yCeV5eQl1VK02
-
-Гранд Мастер Рейки 1–7 ступени:
-  Рубли: 124 900 ₽ → https://superabilityacademy.com/reiki_bon
-  Евро: 948 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3425517?price_id=4339552 | Stripe: https://buy.stripe.com/9B66oIfyX9KO5kv23z1VK03
-
-Мастер Кармы / Высшее мастерство 1–9 ступеней:
-  Рубли: 144 900 ₽ → https://superabilityacademy.com/reiki_bon
-  Евро: 1 093 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3425520?price_id=4339555 | Stripe: https://buy.stripe.com/00weVeaeD7CG14fdMh1VK04
-
-Ступени 4–7 отдельно:
-  Рубли: 39 990 ₽ → https://superabilityacademy.com/reiki_bon
-  Евро: 278 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3425522?price_id=4339557 | Stripe: https://buy.stripe.com/7sYaEYdqPaOSbIT9w11VK05
-
-Ступени 8–9 отдельно:
-  Рубли: 49 990 ₽ → https://superabilityacademy.com/reiki_bon
-  Евро: 334 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3425524?price_id=4339559 | Stripe: https://buy.stripe.com/9B65kE3Qfg9c14f8rX1VK06
-
-Рейки 4 ступень отдельно:
-  Рубли: 25 000 ₽ → https://ekstrasensschool.getcourse.ru/buytibetianreikibon
-  Евро: 330 € → Thinkific: https://course.superabilitiesacademy.com/enroll/3605689?price_id=4542370
+Евро (пакеты, Thinkific):
+  Уровни 1–3: https://course.superabilitiesacademy.com/enroll/3395934?price_id=4333160
+  Уровни 1–7: https://course.superabilitiesacademy.com/enroll/3425517?price_id=4339552
+  Полный 1–9: https://course.superabilitiesacademy.com/enroll/3425520?price_id=4339555
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 7 ЛУЧЕЙ ДУХОВНОГО ПРОБУЖДЕНИЯ
@@ -435,13 +425,13 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 КАК ПРОДАВАТЬ РЕЙКИ БОН — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
 - Все начинают с 1 ступени — НЕ спрашивай "с какой ступени стартовать"
 - Главная задача — подсветить ценность пройти весь путь целителя Бон и выгоду покупки пакета
-- Покажи разницу в цене: 1 ступень отдельно 29 990 ₽, но Мастер Кармы 1–9 ступеней всего 144 900 ₽ — это в разы выгоднее чем покупать по одной
+- Покажи разницу в цене: 1 ступень отдельно 15 000 ₽, но полный курс 1–9 всего 190 000 ₽ (по отдельности вышло бы 265 000 ₽ — экономия 75 000 ₽!)
 - Подчеркни: каждая следующая ступень открывает новый уровень силы и возможностей как целителя
-- Рекомендуй начать с пакета "Мастер 1–3 ступени" (79 990 ₽ / 557 €) как оптимальный старт — это уже полноценный уровень целителя
-- Или "Гранд Мастер 1–7" (124 900 ₽ / 948 €) для тех кто хочет войти сразу глубоко
+- Рекомендуй начать с пакета уровни 1–3 (65 000 ₽) как оптимальный старт — это уже полноценный уровень целителя (по отдельности 75 000 ₽, экономия 10 000 ₽)
+- Или полный курс 1–9 (190 000 ₽) для тех кто хочет войти сразу в полный путь с максимальной выгодой
 - Закрывай вопросом про готовность войти в путь целиком, например:
   "Многие кто приходит за исцелением себя — в итоге становятся целителями для других. Хотите сразу войти в полный путь?"
-  "Когда берёшь пакет сразу — экономишь и идёшь без остановок. Что откликается — начать с Мастера или сразу войти в полный путь?"
+  "Когда берёшь пакет сразу — экономишь и идёшь без остановок. Что откликается — начать с пакета 1–3 или сразу войти в полный путь?"
 
 КАК ПРОДАВАТЬ ПУТЬ НАЧИНАЮЩЕГО — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
 Когда клиент говорит "не знаю с чего начать", "хочу попробовать", "боюсь что не смогу", "только начинаю", "интересуюсь способностями" — предлагай Путь начинающего.
