@@ -513,6 +513,8 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 
 {similar_section}"""
 
+import gc
+
 print("Загружаю карты продуктов...")
 with open(os.path.join(BASE_DIR, "products.txt"), "r", encoding="utf-8") as f:
     products = f.read()
@@ -524,16 +526,17 @@ print("Модель загружена")
 
 print("Подключаюсь к ChromaDB...")
 chroma = chromadb.PersistentClient(path=os.path.join(BASE_DIR, "chroma_db"))
-print("ChromaDB подключена")
-
-print("Получаю коллекцию диалогов...")
 collection = chroma.get_collection("dialogs")
-print(f"Коллекция загружена, {collection.count()} записей")
+print(f"ChromaDB подключена, {collection.count()} записей")
+
+# Освобождаем кэш после инициализации
+gc.collect()
+print("Инициализация завершена, память очищена")
 
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 conversation_history = {}
 
-def find_similar(query, n=5):
+def find_similar(query, n=3):
     embedding = model.encode([query]).tolist()
     results = collection.query(query_embeddings=embedding, n_results=n)
     pairs = []
