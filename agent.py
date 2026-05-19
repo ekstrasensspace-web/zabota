@@ -3,6 +3,8 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
 import os
+import time
+time.sleep(10)  # Ждём завершения старого процесса
 
 CLAUDE_API_KEY = os.environ["CLAUDE_API_KEY"]
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
