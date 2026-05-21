@@ -766,9 +766,19 @@ def is_salebot_outgoing(payload):
 def extract_salebot_payload(raw_payload):
     """SaleBot может прислать разные имена полей — вытаскиваем максимально гибко."""
     payload = raw_payload if isinstance(raw_payload, dict) else {}
+    client_data = payload.get("client") if isinstance(payload.get("client"), dict) else {}
     message = salebot_value(payload, "message", "text", "callback_message", "msg", "body")
-    client_id = salebot_value(payload, "client_id", "id", "user_id", "platform_id")
-    user_name = salebot_value(payload, "name", "first_name", "client_name", "username") or f"SaleBot {client_id}"
+    # В вебхуке SaleBot верхний id часто является id сообщения, а настоящий id клиента лежит в client.id.
+    client_id = (
+        salebot_value(client_data, "id", "client_id")
+        or salebot_value(payload, "client_id", "user_id", "platform_id")
+        or salebot_value(payload, "id")
+    )
+    user_name = (
+        salebot_value(client_data, "name", "first_name", "username")
+        or salebot_value(payload, "name", "first_name", "client_name", "username")
+        or f"SaleBot {client_id}"
+    )
     return str(client_id) if client_id is not None else None, str(message).strip() if message else "", str(user_name)
 
 def send_salebot_message(client_id, message):
