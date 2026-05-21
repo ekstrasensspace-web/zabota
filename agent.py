@@ -1,13 +1,17 @@
 import anthropic
+import requests
+from flask import Flask, jsonify, request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
 import os
 import time
+import threading
 time.sleep(10)  # Ждём завершения старого процесса
 
 CLAUDE_API_KEY = os.environ["CLAUDE_API_KEY"]
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
+SALEBOT_API_KEY = os.environ.get("SALEBOT_API_KEY", "")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -684,6 +688,8 @@ forwarded_map = {}          # message_id пересланного сообщен
 known_users = load_known_users()
 print(f"Известных пользователей: {len(known_users)}")
 
+web_app = Flask(__name__)
+
 def find_similar(query, n=3):
     if model is None or collection is None:
         return ""
@@ -696,6 +702,129 @@ def find_similar(query, n=3):
         return "\n".join(pairs)
     except Exception:
         return ""
+
+def build_system_prompt(similar=""):
+    return SYSTEM_PROMPT_TEMPLATE.format(
+        stream_recordings=STREAM_RECORDINGS,
+        prices=PRICES,
+        schedule=SCHEDULE,
+        products_section="=== КАРТЫ ПРОДУКТОВ ===\n" + products,
+        similar_section="=== ПОХОЖИЕ ДИАЛОГИ ИЗ ПРАКТИКИ ===\n" + similar
+    )
+
+def generate_ai_reply(conversation_key, user_message):
+    """Единый мозг бота для Telegram, SaleBot и будущих каналов."""
+    if conversation_key not in conversation_history:
+        conversation_history[conversation_key] = []
+
+    similar = find_similar(user_message)
+    conversation_history[conversation_key].append({"role": "user", "content": user_message})
+    if len(conversation_history[conversation_key]) > 20:
+        conversation_history[conversation_key] = conversation_history[conversation_key][-20:]
+
+    response = client.messages.create(
+        model="claude-opus-4-5",
+        max_tokens=1024,
+        system=build_system_prompt(similar),
+        messages=conversation_history[conversation_key]
+    )
+    reply = response.content[0].text
+    conversation_history[conversation_key].append({"role": "assistant", "content": reply})
+    return reply
+
+def telegram_notify_sync(text):
+    """Синхронное уведомление в канал мониторинга для вебхуков SaleBot."""
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json={"chat_id": LOG_CHANNEL_ID, "text": text[:3900]},
+            timeout=10,
+        )
+    except Exception as exc:
+        print(f"Не удалось отправить уведомление в Telegram: {exc}", flush=True)
+
+def salebot_value(payload, *keys):
+    for key in keys:
+        value = payload.get(key)
+        if value is not None and value != "":
+            return value
+    return None
+
+def salebot_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "out", "outgoing", "operator", "manager", "bot"}
+
+def is_salebot_outgoing(payload):
+    if salebot_bool(salebot_value(payload, "is_outgoing", "outgoing", "from_me", "is_echo", "out")):
+        return True
+    direction = salebot_value(payload, "direction", "message_direction", "sender_type", "author_type")
+    return salebot_bool(direction)
+
+def extract_salebot_payload(raw_payload):
+    """SaleBot может прислать разные имена полей — вытаскиваем максимально гибко."""
+    payload = raw_payload if isinstance(raw_payload, dict) else {}
+    message = salebot_value(payload, "message", "text", "callback_message", "msg", "body")
+    client_id = salebot_value(payload, "client_id", "id", "user_id", "platform_id")
+    user_name = salebot_value(payload, "name", "first_name", "client_name", "username") or f"SaleBot {client_id}"
+    return str(client_id) if client_id is not None else None, str(message).strip() if message else "", str(user_name)
+
+def send_salebot_message(client_id, message):
+    if not SALEBOT_API_KEY:
+        raise RuntimeError("SALEBOT_API_KEY не задан в Railway Variables")
+
+    response = requests.post(
+        f"https://chatter.salebot.pro/api/{SALEBOT_API_KEY}/message",
+        json={"client_id": client_id, "message": message},
+        timeout=20,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"SaleBot API error {response.status_code}: {response.text[:500]}")
+    return response.text
+
+def process_salebot_message(payload):
+    client_id, user_message, user_name = extract_salebot_payload(payload)
+
+    if not client_id or not user_message:
+        print(f"SaleBot webhook ignored: no client_id/message. Payload={payload}", flush=True)
+        return
+    if is_salebot_outgoing(payload):
+        print(f"SaleBot outgoing ignored for client {client_id}", flush=True)
+        return
+    if user_message.startswith("message:"):
+        print(f"SaleBot system message ignored: {user_message}", flush=True)
+        return
+
+    user_key = f"salebot:{client_id}"
+    reply = generate_ai_reply(user_key, user_message)
+    send_salebot_message(client_id, reply)
+
+    telegram_notify_sync(
+        f"👤 SaleBot — {user_name} ({client_id}):\n{user_message}\n\n"
+        f"🤖 Бот:\n{reply}"
+    )
+    print(f"SaleBot reply sent to {client_id}", flush=True)
+
+@web_app.get("/")
+def healthcheck():
+    return jsonify({"ok": True, "service": "mas-bot"})
+
+@web_app.post("/salebot/webhook")
+def salebot_webhook():
+    payload = request.get_json(silent=True)
+    if payload is None:
+        payload = request.form.to_dict() or request.args.to_dict()
+
+    print(f"SaleBot webhook received: {payload}", flush=True)
+    threading.Thread(target=process_salebot_message, args=(payload,), daemon=True).start()
+    return jsonify({"ok": True})
+
+def run_web_server():
+    port = int(os.environ.get("PORT", "8080"))
+    print(f"HTTP сервер запущен на порту {port}", flush=True)
+    web_app.run(host="0.0.0.0", port=port)
 
 async def notify_admin(context, user_id, user_name, user_message, bot_reply=None):
     """Отправляет диалог в канал мониторинга."""
@@ -793,30 +922,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Обычный режим — отвечает бот
-    if user_id not in conversation_history:
-        conversation_history[user_id] = []
-
-    similar = find_similar(user_message)
-    conversation_history[user_id].append({"role": "user", "content": user_message})
-    if len(conversation_history[user_id]) > 20:
-        conversation_history[user_id] = conversation_history[user_id][-20:]
-
-    system = SYSTEM_PROMPT_TEMPLATE.format(
-        stream_recordings=STREAM_RECORDINGS,
-        prices=PRICES,
-        schedule=SCHEDULE,
-        products_section="=== КАРТЫ ПРОДУКТОВ ===\n" + products,
-        similar_section="=== ПОХОЖИЕ ДИАЛОГИ ИЗ ПРАКТИКИ ===\n" + similar
-    )
-
-    response = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=1024,
-        system=system,
-        messages=conversation_history[user_id]
-    )
-    reply = response.content[0].text
-    conversation_history[user_id].append({"role": "assistant", "content": reply})
+    reply = generate_ai_reply(user_id, user_message)
     await update.message.reply_text(reply)
 
     # Пересылаем диалог администратору
@@ -830,5 +936,6 @@ from telegram.ext import filters as tg_filters
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(CommandHandler("start", handle_start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+threading.Thread(target=run_web_server, daemon=True).start()
 print("Бот запущен!")
 app.run_polling(drop_pending_updates=True)
