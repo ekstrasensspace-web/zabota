@@ -758,6 +758,9 @@ def salebot_bool(value):
     return str(value).strip().lower() in {"1", "true", "yes", "out", "outgoing", "operator", "manager", "bot"}
 
 def is_salebot_outgoing(payload):
+    is_input = salebot_value(payload, "is_input")
+    if is_input is not None and not salebot_bool(is_input):
+        return True
     if salebot_bool(salebot_value(payload, "is_outgoing", "outgoing", "from_me", "is_echo", "out")):
         return True
     direction = salebot_value(payload, "direction", "message_direction", "sender_type", "author_type")
