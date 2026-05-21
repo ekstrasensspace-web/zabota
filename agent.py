@@ -826,6 +826,37 @@ def salebot_webhook():
     threading.Thread(target=process_salebot_message, args=(payload,), daemon=True).start()
     return jsonify({"ok": True})
 
+@web_app.route("/salebot/reply", methods=["GET", "POST"])
+@web_app.route("/salebot/reply/", methods=["GET", "POST"])
+def salebot_reply():
+    """Синхронный режим для блока API-запрос в SaleBot.
+
+    SaleBot отправляет сообщение клиента, мы возвращаем JSON с готовым ответом.
+    В SaleBot нужно сохранить поле answer в переменную и отправить её следующим блоком.
+    """
+    payload = request.get_json(silent=True)
+    if payload is None:
+        payload = request.form.to_dict() or request.args.to_dict()
+
+    print(f"SaleBot reply request received: {payload}", flush=True)
+    client_id, user_message, user_name = extract_salebot_payload(payload)
+
+    if not client_id:
+        client_id = salebot_value(payload, "client_id", "id", "user_id", "platform_id", "phone", "email") or "unknown"
+    if not user_message:
+        return jsonify({
+            "ok": False,
+            "answer": "Не увидела текст сообщения. Напишите, пожалуйста, ваш вопрос ещё раз.",
+            "error": "no_message"
+        })
+
+    reply = generate_ai_reply(f"salebot:{client_id}", user_message)
+    telegram_notify_sync(
+        f"👤 SaleBot API — {user_name} ({client_id}):\n{user_message}\n\n"
+        f"🤖 Бот:\n{reply}"
+    )
+    return jsonify({"ok": True, "answer": reply, "client_id": client_id})
+
 def run_web_server():
     port = int(os.environ.get("PORT", "8080"))
     print(f"HTTP сервер запущен на порту {port}", flush=True)
