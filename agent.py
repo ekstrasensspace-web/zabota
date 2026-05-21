@@ -811,8 +811,13 @@ def process_salebot_message(payload):
 def healthcheck():
     return jsonify({"ok": True, "service": "mas-bot"})
 
-@web_app.post("/salebot/webhook")
+@web_app.route("/salebot/webhook", methods=["GET", "POST"])
+@web_app.route("/salebot/webhook/", methods=["GET", "POST"])
 def salebot_webhook():
+    if request.method == "GET":
+        print("SaleBot webhook GET check received", flush=True)
+        return jsonify({"ok": True, "endpoint": "salebot/webhook", "method": "GET"})
+
     payload = request.get_json(silent=True)
     if payload is None:
         payload = request.form.to_dict() or request.args.to_dict()
