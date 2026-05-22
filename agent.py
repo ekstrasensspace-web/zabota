@@ -790,7 +790,7 @@ def looks_like_symbol_decode_request(text):
     asks_decode = any(word in normalized for word in ("расшифр", "розшифр", "что значит", "що означає"))
     return has_color and (has_number or has_symbol) and (has_separator or asks_decode or len(normalized.split()) <= 12)
 
-def local_symbol_decode_reply(user_message):
+def local_symbol_decode_reply(user_message, language="ru"):
     normalized = user_message.lower()
 
     color_meanings = {
@@ -884,7 +884,12 @@ def local_symbol_decode_reply(user_message):
     )
     return "\n\n".join(parts)
 
-def generate_symbol_decode_reply(user_message):
+def generate_symbol_decode_reply(user_message, language="auto"):
+    language_rule = (
+        "Отвечай строго на русском языке, даже если клиент написал часть слов на украинском. "
+        if language == "ru" else
+        "Отвечай на языке клиента: русский или украинский. "
+    )
     try:
         response = client.messages.create(
             model="claude-opus-4-5",
@@ -892,7 +897,7 @@ def generate_symbol_decode_reply(user_message):
             system=(
                 "Ты сотрудник Международной Академии Сверхспособностей. "
                 "Тебе прислали цвет, цифру и символы из короткого видео Натальи. "
-                "Сделай теплую мистическую расшифровку на языке клиента: русский или украинский. "
+                + language_rule +
                 "Не ставь диагнозы, не обещай исцеление и не говори категорично о судьбе. "
                 "Пиши живо, красиво, 3-5 коротких абзацев. "
                 "Объясни цвет, цифру и символы как подсказки о силе души, потенциале и пути. "
@@ -905,7 +910,7 @@ def generate_symbol_decode_reply(user_message):
         return response.content[0].text
     except Exception as exc:
         print(f"Claude API error in generate_symbol_decode_reply: {exc}", flush=True)
-        return local_symbol_decode_reply(user_message)
+        return local_symbol_decode_reply(user_message, language=language)
 
 def is_allowed_public_decode_chat(chat):
     username = (getattr(chat, "username", None) or "").lstrip("@").lower()
@@ -1401,7 +1406,7 @@ async def handle_public_symbol_decode(update: Update, context: ContextTypes.DEFA
 
     user_message = message.text.strip()
     if looks_like_symbol_decode_request(user_message):
-        reply = generate_symbol_decode_reply(user_message)
+        reply = generate_symbol_decode_reply(user_message, language="ru")
         await message.reply_text(reply)
 
         try:
@@ -1467,7 +1472,7 @@ async def handle_decode_command(update: Update, context: ContextTypes.DEFAULT_TY
         f"Telegram /decode received: chat_id={chat.id}, title={chat.title}, username={getattr(chat, 'username', None)}, text={text[:120]}",
         flush=True,
     )
-    reply = generate_symbol_decode_reply(text)
+    reply = generate_symbol_decode_reply(text, language="ru")
     await message.reply_text(reply)
 
 from telegram.ext import filters as tg_filters
