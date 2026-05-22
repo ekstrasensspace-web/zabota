@@ -581,6 +581,7 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 - Шаг 2: если клиент говорит что проверил и не нашёл → "Напишите мне email который указывали при оплате — передам специалисту, он проверит в системе и пришлёт доступ."
 - Шаг 3: если клиент написал email → "Спасибо! Передаю специалисту — он свяжется с вами в ближайшее время."
 НЕ переходи к "передам специалисту" пока клиент не сказал что проверил Спам.
+ВАЖНО: все вопросы по доступу, письмам, личному кабинету и GetCourse автоматически уходят человеку на ручную проверку. Клиенту об этом можно сказать спокойно: "Я дополнительно передам это специалисту, чтобы доступ проверили без ошибки."
 
 НЕ ПРИШЛА ССЫЛКА НА TELEGRAM-КАНАЛ ("не получила ссылку", "где ссылка на канал", "как попасть в чат"):
 - "Ссылка на Telegram-канал приходит на почту после подтверждения оплаты — проверьте папку Спам и Промоакции. Если не нашли — напишите email с которого оплачивали, передам специалисту."
@@ -730,6 +731,49 @@ def mark_public_message_processed(chat_id, message_id):
         if len(processed_public_messages) > 2000:
             processed_public_messages.clear()
         return True
+
+def human_attention_reason(user_message, bot_reply=""):
+    """Определяем случаи, где нужен человек: доступы, неизвестный ответ, уточнение у специалиста."""
+    message = re.sub(r"\s+", " ", (user_message or "").lower()).strip()
+    reply = re.sub(r"\s+", " ", (bot_reply or "").lower()).strip()
+
+    access_markers = (
+        "нет доступа", "не вижу курс", "не вижу урок", "не открылся курс",
+        "не открылся урок", "не открывается курс", "не могу войти",
+        "не получается войти", "не пришло письмо", "не пришла ссылка",
+        "не получила письмо", "не получил письмо", "не получила ссылку",
+        "не получил ссылку", "не пришел доступ", "не пришёл доступ",
+        "не получила доступ", "не получил доступ", "доступ к курсу",
+        "откройте доступ", "открыть доступ", "личный кабинет",
+        "геткурс", "getcourse", "get course", "папка спам", "спам",
+        "email", "e-mail", "почта", "пошту", "лист з доступом",
+        "немає доступу", "не бачу курс", "не прийшов лист",
+        "не прийшло посилання", "не можу увійти",
+    )
+    if any(marker in message for marker in access_markers):
+        return "вопрос по доступу к курсу / письму / личному кабинету"
+
+    human_reply_markers = (
+        "уточню этот вопрос", "уточню у специалиста", "передам специалисту",
+        "передаю специалисту", "специалист проверит", "специалист свяжется",
+        "не могу ответить точно", "временно не может ответить точно",
+        "нет информации", "не нашла информации", "не вижу информации",
+        "нужно уточнить", "потрібно уточнити", "передам фахівцю",
+    )
+    if any(marker in reply for marker in human_reply_markers):
+        return "боту нужно уточнение у специалиста"
+
+    return None
+
+def build_human_attention_notice(source, user_name, client_id, user_message, bot_reply, reason, action_text):
+    return (
+        f"⚠️ Нужна ручная проверка: {reason}\n"
+        f"Источник: {source}\n"
+        f"Клиент: {user_name} ({client_id})\n\n"
+        f"Сообщение клиента:\n{user_message}\n\n"
+        f"Ответ бота:\n{bot_reply}\n\n"
+        f"{action_text}"
+    )
 
 def find_similar(query, n=3):
     if model is None or collection is None:
@@ -1159,11 +1203,23 @@ def process_salebot_message(payload):
     reply = generate_ai_reply(user_key, user_message)
     send_salebot_message(client_id, reply)
 
-    telegram_notify_sync(
-        f"👤 SaleBot — {user_name} ({client_id})\n"
-        f"{salebot_channel_info(payload)}:\n{user_message}\n\n"
-        f"🤖 Бот:\n{reply}"
-    )
+    reason = human_attention_reason(user_message, reply)
+    if reason:
+        telegram_notify_sync(build_human_attention_notice(
+            "SaleBot",
+            user_name,
+            client_id,
+            user_message,
+            reply,
+            reason,
+            f"Тейковер: откройте клиента в SaleBot и возьмите диалог вручную.\n{salebot_channel_info(payload)}",
+        ))
+    else:
+        telegram_notify_sync(
+            f"👤 SaleBot — {user_name} ({client_id})\n"
+            f"{salebot_channel_info(payload)}:\n{user_message}\n\n"
+            f"🤖 Бот:\n{reply}"
+        )
     print(f"SaleBot reply sent to {client_id} ({salebot_channel_info(payload)})", flush=True)
 
 def extract_getcourse_payload(raw_payload):
@@ -1232,10 +1288,22 @@ def process_getcourse_message(payload):
 
     user_key = f"getcourse:{client_id}"
     reply = generate_ai_reply(user_key, user_message)
-    telegram_notify_sync(
-        f"👤 GetCourse/VK — {user_name} ({client_id}):\n{user_message}\n\n"
-        f"🤖 Бот:\n{reply}"
-    )
+    reason = human_attention_reason(user_message, reply)
+    if reason:
+        telegram_notify_sync(build_human_attention_notice(
+            "GetCourse/VK",
+            user_name,
+            client_id,
+            user_message,
+            reply,
+            reason,
+            "Тейковер: откройте клиента в GetCourse/VK и возьмите диалог вручную.",
+        ))
+    else:
+        telegram_notify_sync(
+            f"👤 GetCourse/VK — {user_name} ({client_id}):\n{user_message}\n\n"
+            f"🤖 Бот:\n{reply}"
+        )
     print(f"GetCourse reply generated for {client_id}", flush=True)
     return reply
 
@@ -1283,10 +1351,22 @@ def salebot_reply():
         })
 
     reply = generate_ai_reply(f"salebot:{client_id}", user_message)
-    telegram_notify_sync(
-        f"👤 SaleBot API — {user_name} ({client_id}):\n{user_message}\n\n"
-        f"🤖 Бот:\n{reply}"
-    )
+    reason = human_attention_reason(user_message, reply)
+    if reason:
+        telegram_notify_sync(build_human_attention_notice(
+            "SaleBot API",
+            user_name,
+            client_id,
+            user_message,
+            reply,
+            reason,
+            "Тейковер: откройте клиента в SaleBot и возьмите диалог вручную.",
+        ))
+    else:
+        telegram_notify_sync(
+            f"👤 SaleBot API — {user_name} ({client_id}):\n{user_message}\n\n"
+            f"🤖 Бот:\n{reply}"
+        )
     return jsonify({"ok": True, "answer": reply, "client_id": client_id})
 
 @web_app.route("/getcourse/webhook", methods=["GET", "POST"])
@@ -1391,10 +1471,12 @@ def run_telethon_watcher():
     except Exception as exc:
         print(f"Telethon watcher crashed: {exc}", flush=True)
 
-async def notify_admin(context, user_id, user_name, user_message, bot_reply=None):
+async def notify_admin(context, user_id, user_name, user_message, bot_reply=None, attention_reason=None):
     """Отправляет диалог в канал мониторинга."""
     if bot_reply:
+        prefix = f"⚠️ Нужна ручная проверка: {attention_reason}\n\n" if attention_reason else ""
         text = (
+            prefix +
             f"👤 {user_name} ({user_id}):\n{user_message}\n\n"
             f"🤖 Бот:\n{bot_reply}\n\n"
             f"Взять диалог: /takeover {user_id}"
@@ -1489,10 +1571,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обычный режим — отвечает бот
     reply = generate_ai_reply(user_id, user_message)
     await update.message.reply_text(reply)
+    attention_reason = human_attention_reason(user_message, reply)
 
     # Пересылаем диалог администратору
     try:
-        await notify_admin(context, user_id, user_name, user_message, bot_reply=reply)
+        await notify_admin(context, user_id, user_name, user_message, bot_reply=reply, attention_reason=attention_reason)
     except Exception:
         pass  # не ломаем бота если уведомление не дошло
 
