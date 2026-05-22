@@ -1,4 +1,5 @@
 import anthropic
+import google.generativeai as genai
 import requests
 from flask import Flask, jsonify, request
 from telegram import Update
@@ -17,7 +18,8 @@ time.sleep(10)  # Ждём завершения старого процесса
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram").setLevel(logging.WARNING)
 
-CLAUDE_API_KEY = os.environ["CLAUDE_API_KEY"]
+CLAUDE_API_KEY = os.environ.get("CLAUDE_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 SALEBOT_API_KEY = os.environ.get("SALEBOT_API_KEY", "")
 TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID", "")
@@ -722,7 +724,41 @@ def save_user(user_id):
     with open(USERS_FILE, "a") as f:
         f.write(str(user_id) + "\n")
 
-client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+client = anthropic.Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
+
+# Gemini — основная модель (бесплатно 1500 запросов/день)
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+else:
+    gemini_model = None
+
+def call_ai(system_prompt, user_message, max_tokens=1024):
+    """Универсальный вызов AI: сначала Gemini (бесплатно), потом Claude как запасной."""
+    # Пробуем Gemini
+    if gemini_model:
+        try:
+            full_prompt = system_prompt + "\n\n---\nСообщение клиента:\n" + user_message
+            response = gemini_model.generate_content(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens)
+            )
+            return response.text
+        except Exception as exc:
+            print(f"Gemini API error: {exc}", flush=True)
+    # Fallback на Claude
+    if client:
+        try:
+            response = client.messages.create(
+                model="claude-haiku-4-5",
+                max_tokens=max_tokens,
+                system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+                messages=[{"role": "user", "content": user_message}]
+            )
+            return response.content[0].text
+        except Exception as exc:
+            print(f"Claude API error (fallback): {exc}", flush=True)
+    return None
 conversation_history = {}
 paused_users = set()        # пользователи на ручном управлении
 forwarded_map = {}          # message_id пересланного сообщения → user_id клиента
@@ -951,20 +987,17 @@ def generate_ai_reply(conversation_key, user_message):
     if len(conversation_history[conversation_key]) > 20:
         conversation_history[conversation_key] = conversation_history[conversation_key][-20:]
 
-    try:
-        response = client.messages.create(
-            model="claude-haiku-4-5",
-            max_tokens=1024,
-            system=[{
-                "type": "text",
-                "text": build_system_prompt(similar),
-                "cache_control": {"type": "ephemeral"}
-            }],
-            messages=conversation_history[conversation_key]
-        )
-        reply = response.content[0].text
-    except Exception as exc:
-        print(f"Claude API error in generate_ai_reply: {exc}", flush=True)
+    # Собираем историю в один текст для Gemini
+    history_text = ""
+    for msg in conversation_history[conversation_key][:-1]:
+        role = "Клиент" if msg["role"] == "user" else "Консультант"
+        history_text += f"{role}: {msg['content']}\n"
+
+    system = build_system_prompt(similar)
+    full_user = (history_text + f"Клиент: {user_message}").strip()
+
+    reply = call_ai(system, full_user, max_tokens=1024)
+    if not reply:
         reply = fallback_reply()
     conversation_history[conversation_key].append({"role": "assistant", "content": reply})
     return reply
@@ -1110,27 +1143,22 @@ def generate_symbol_decode_reply(user_message, language="auto"):
         if language == "ru" else
         "Отвечай на языке клиента: русский или украинский. "
     )
-    try:
-        response = client.messages.create(
-            model="claude-haiku-4-5",
-            max_tokens=600,
-            system=(
-                "Ты сотрудник Международной Академии Сверхспособностей. "
-                "Тебе прислали цвет, цифру и символы из короткого видео Натальи. "
-                + language_rule +
-                "Не ставь диагнозы, не обещай исцеление и не говори категорично о судьбе. "
-                "Пиши живо, красиво, 3-5 коротких абзацев. "
-                "Объясни цвет, цифру и символы как подсказки о силе души, потенциале и пути. "
-                "Не используй markdown, звездочки и списки. "
-                "В конце мягко пригласи пройти полный тест: "
-                "Чтобы узнать свои сверхспособности глубже, пройдите полный тест: https://star-soul-quest.lovable.app"
-            ),
-            messages=[{"role": "user", "content": user_message}],
-        )
-        return response.content[0].text
-    except Exception as exc:
-        print(f"Claude API error in generate_symbol_decode_reply: {exc}", flush=True)
-        return local_symbol_decode_reply(user_message, language=language)
+    symbol_system = (
+        "Ты сотрудник Международной Академии Сверхспособностей. "
+        "Тебе прислали цвет, цифру и символы из короткого видео Натальи. "
+        + language_rule +
+        "Не ставь диагнозы, не обещай исцеление и не говори категорично о судьбе. "
+        "Пиши живо, красиво, 3-5 коротких абзацев. "
+        "Объясни цвет, цифру и символы как подсказки о силе души, потенциале и пути. "
+        "Не используй markdown, звездочки и списки. "
+        "В конце мягко пригласи пройти полный тест: "
+        "Чтобы узнать свои сверхспособности глубже, пройдите полный тест: https://star-soul-quest.lovable.app"
+    )
+    reply = call_ai(symbol_system, user_message, max_tokens=600)
+    if reply:
+        return reply
+    print(f"AI недоступен, использую локальную расшифровку", flush=True)
+    return local_symbol_decode_reply(user_message, language=language)
 
 def is_allowed_public_decode_chat(chat):
     username = (getattr(chat, "username", None) or "").lstrip("@").lower()
