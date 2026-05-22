@@ -5,6 +5,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
 import os
+import re
 import time
 import threading
 time.sleep(10)  # Ждём завершения старого процесса
@@ -686,6 +687,8 @@ conversation_history = {}
 paused_users = set()        # пользователи на ручном управлении
 forwarded_map = {}          # message_id пересланного сообщения → user_id клиента
 known_users = load_known_users()
+processed_salebot_events = set()
+salebot_last_answer = {}
 print(f"Известных пользователей: {len(known_users)}")
 
 web_app = Flask(__name__)
@@ -766,6 +769,31 @@ def is_salebot_outgoing(payload):
     direction = salebot_value(payload, "direction", "message_direction", "sender_type", "author_type")
     return salebot_bool(direction)
 
+def is_salebot_noise_message(message):
+    """Отсекаем автосообщения воронок, одиночные эмодзи и технический шум SaleBot."""
+    normalized = re.sub(r"\s+", " ", message.lower()).strip()
+    bot_waiting_phrases = (
+        "жду тебя",
+        "жду твоего вопроса",
+        "готова ответить",
+        "когда появится вопрос",
+        "когда напишешь",
+        "просто напиши",
+        "буду рада помочь",
+        "здесь, когда понадоблюсь",
+        "всё хорошо — я на связи",
+        "все хорошо — я на связи",
+        "похоже, мои сообщения возвращаются обратно",
+    )
+    if any(phrase in normalized for phrase in bot_waiting_phrases):
+        return True
+    if not any(ch.isalnum() for ch in normalized):
+        return True
+    return False
+
+def salebot_event_id(payload):
+    return salebot_value(payload, "internal_id", "message_id", "id")
+
 def extract_salebot_payload(raw_payload):
     """SaleBot может прислать разные имена полей — вытаскиваем максимально гибко."""
     payload = raw_payload if isinstance(raw_payload, dict) else {}
@@ -803,9 +831,27 @@ def process_salebot_message(payload):
     if not client_id or not user_message:
         print(f"SaleBot webhook ignored: no client_id/message. Payload={payload}", flush=True)
         return
+    event_id = salebot_event_id(payload)
+    if event_id:
+        event_key = str(event_id)
+        if event_key in processed_salebot_events:
+            print(f"SaleBot duplicate ignored: {event_key}", flush=True)
+            return
+        processed_salebot_events.add(event_key)
+        if len(processed_salebot_events) > 1000:
+            processed_salebot_events.clear()
     if is_salebot_outgoing(payload):
         print(f"SaleBot outgoing ignored for client {client_id}", flush=True)
         return
+    if is_salebot_noise_message(user_message):
+        print(f"SaleBot noise ignored for client {client_id}: {user_message[:120]}", flush=True)
+        return
+    now = time.time()
+    last_answer_at = salebot_last_answer.get(client_id, 0)
+    if now - last_answer_at < 12:
+        print(f"SaleBot rate-limit ignored for client {client_id}: {user_message[:120]}", flush=True)
+        return
+    salebot_last_answer[client_id] = now
     if user_message.startswith("message:"):
         print(f"SaleBot system message ignored: {user_message}", flush=True)
         return
