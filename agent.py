@@ -1,5 +1,4 @@
 import anthropic
-import google.generativeai as genai
 import requests
 from flask import Flask, jsonify, request
 from telegram import Update
@@ -726,26 +725,33 @@ def save_user(user_id):
 
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
 
-# Gemini — основная модель (бесплатно 1500 запросов/день)
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel("gemini-1.5-flash")
-else:
-    gemini_model = None
+def call_gemini(system_prompt, user_message, max_tokens=1024):
+    """Вызов Gemini 1.5 Flash через HTTP — бесплатно, 1500 запросов/день."""
+    if not GEMINI_API_KEY:
+        return None
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    )
+    full_prompt = system_prompt + "\n\n---\nСообщение клиента:\n" + user_message
+    body = {
+        "contents": [{"parts": [{"text": full_prompt}]}],
+        "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7},
+    }
+    try:
+        resp = requests.post(url, json=body, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception as exc:
+        print(f"Gemini API error: {exc}", flush=True)
+        return None
 
 def call_ai(system_prompt, user_message, max_tokens=1024):
-    """Универсальный вызов AI: сначала Gemini (бесплатно), потом Claude как запасной."""
-    # Пробуем Gemini
-    if gemini_model:
-        try:
-            full_prompt = system_prompt + "\n\n---\nСообщение клиента:\n" + user_message
-            response = gemini_model.generate_content(
-                full_prompt,
-                generation_config=genai.types.GenerationConfig(max_output_tokens=max_tokens)
-            )
-            return response.text
-        except Exception as exc:
-            print(f"Gemini API error: {exc}", flush=True)
+    """Gemini (бесплатно) → Claude (платный запасной)."""
+    reply = call_gemini(system_prompt, user_message, max_tokens)
+    if reply:
+        return reply
     # Fallback на Claude
     if client:
         try:
