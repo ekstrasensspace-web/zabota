@@ -786,6 +786,7 @@ def is_salebot_noise_message(message):
         "всё хорошо — я на связи",
         "все хорошо — я на связи",
         "похоже, мои сообщения возвращаются обратно",
+        "client_group_join",
     )
     if any(phrase in normalized for phrase in bot_waiting_phrases):
         return True
@@ -813,6 +814,35 @@ def recursive_find(data, *keys):
             if found is not None and found != "":
                 return found
     return None
+
+def is_salebot_comment_payload(payload, message):
+    """SaleBot может присылать комментарии как webhook, но ИИ должен отвечать только в личных сообщениях."""
+    normalized = message.lower()
+    if any(marker in normalized for marker in (
+        "fb_client_wall_reply_new_comment",
+        "new_comment",
+        "reply_new_comment",
+        "ответить на комментарий",
+    )):
+        return True
+
+    client_data = payload.get("client") if isinstance(payload.get("client"), dict) else {}
+    variables = client_data.get("variables") if isinstance(client_data.get("variables"), dict) else {}
+    order_variables = client_data.get("order_variables") if isinstance(client_data.get("order_variables"), dict) else {}
+    comment_markers = (
+        "comment_id",
+        "facebook_last_comment_id",
+        "facebook_media_url",
+        "fb_client_wall_reply",
+        "private_reply",
+    )
+    for source in (payload, client_data, variables, order_variables):
+        if not isinstance(source, dict):
+            continue
+        keys_text = " ".join(str(key).lower() for key in source.keys())
+        if any(marker in keys_text for marker in comment_markers):
+            return True
+    return False
 
 def extract_salebot_payload(raw_payload):
     """SaleBot может прислать разные имена полей — вытаскиваем максимально гибко."""
@@ -862,6 +892,9 @@ def process_salebot_message(payload):
             processed_salebot_events.clear()
     if is_salebot_outgoing(payload):
         print(f"SaleBot outgoing ignored for client {client_id}", flush=True)
+        return
+    if is_salebot_comment_payload(payload, user_message):
+        print(f"SaleBot comment ignored for client {client_id}: {user_message[:120]}", flush=True)
         return
     if is_salebot_noise_message(user_message):
         print(f"SaleBot noise ignored for client {client_id}: {user_message[:120]}", flush=True)
