@@ -721,6 +721,12 @@ def build_system_prompt(similar=""):
         similar_section="=== ПОХОЖИЕ ДИАЛОГИ ИЗ ПРАКТИКИ ===\n" + similar
     )
 
+def fallback_reply():
+    return (
+        "Сейчас автоматический помощник временно не может ответить точно. "
+        "Я передам ваш вопрос специалисту, чтобы вам помогли без ошибки."
+    )
+
 def generate_ai_reply(conversation_key, user_message):
     """Единый мозг бота для Telegram, SaleBot и будущих каналов."""
     if conversation_key not in conversation_history:
@@ -731,13 +737,17 @@ def generate_ai_reply(conversation_key, user_message):
     if len(conversation_history[conversation_key]) > 20:
         conversation_history[conversation_key] = conversation_history[conversation_key][-20:]
 
-    response = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=1024,
-        system=build_system_prompt(similar),
-        messages=conversation_history[conversation_key]
-    )
-    reply = response.content[0].text
+    try:
+        response = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=1024,
+            system=build_system_prompt(similar),
+            messages=conversation_history[conversation_key]
+        )
+        reply = response.content[0].text
+    except Exception as exc:
+        print(f"Claude API error in generate_ai_reply: {exc}", flush=True)
+        reply = fallback_reply()
     conversation_history[conversation_key].append({"role": "assistant", "content": reply})
     return reply
 
@@ -776,23 +786,31 @@ def looks_like_symbol_decode_request(text):
     return has_color and (has_number or has_symbol) and (has_separator or asks_decode or len(normalized.split()) <= 12)
 
 def generate_symbol_decode_reply(user_message):
-    response = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=600,
-        system=(
-            "Ты сотрудник Международной Академии Сверхспособностей. "
-            "Тебе прислали цвет, цифру и символы из короткого видео Натальи. "
-            "Сделай теплую мистическую расшифровку на языке клиента: русский или украинский. "
-            "Не ставь диагнозы, не обещай исцеление и не говори категорично о судьбе. "
-            "Пиши живо, красиво, 3-5 коротких абзацев. "
-            "Объясни цвет, цифру и символы как подсказки о силе души, потенциале и пути. "
-            "Не используй markdown, звездочки и списки. "
-            "В конце мягко пригласи пройти полный тест: "
-            "Чтобы узнать свои сверхспособности глубже, пройдите полный тест: https://star-soul-quest.lovable.app"
-        ),
-        messages=[{"role": "user", "content": user_message}],
-    )
-    return response.content[0].text
+    try:
+        response = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=600,
+            system=(
+                "Ты сотрудник Международной Академии Сверхспособностей. "
+                "Тебе прислали цвет, цифру и символы из короткого видео Натальи. "
+                "Сделай теплую мистическую расшифровку на языке клиента: русский или украинский. "
+                "Не ставь диагнозы, не обещай исцеление и не говори категорично о судьбе. "
+                "Пиши живо, красиво, 3-5 коротких абзацев. "
+                "Объясни цвет, цифру и символы как подсказки о силе души, потенциале и пути. "
+                "Не используй markdown, звездочки и списки. "
+                "В конце мягко пригласи пройти полный тест: "
+                "Чтобы узнать свои сверхспособности глубже, пройдите полный тест: https://star-soul-quest.lovable.app"
+            ),
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return response.content[0].text
+    except Exception as exc:
+        print(f"Claude API error in generate_symbol_decode_reply: {exc}", flush=True)
+        return (
+            "Вижу ваш набор символов. Сейчас расшифровка временно недоступна, "
+            "но вы можете пройти полный тест и узнать свои сверхспособности глубже: "
+            "https://star-soul-quest.lovable.app"
+        )
 
 def is_allowed_public_decode_chat(chat):
     username = (getattr(chat, "username", None) or "").lstrip("@").lower()
