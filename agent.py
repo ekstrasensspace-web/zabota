@@ -15,7 +15,7 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 SALEBOT_API_KEY = os.environ.get("SALEBOT_API_KEY", "")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SUPPORT_BOT_USERNAME = os.environ.get("SUPPORT_BOT_USERNAME", "Zabota_mac_academy_bot")
+SUPPORT_BOT_USERNAME = os.environ.get("SUPPORT_BOT_USERNAME", "zabotamacbot")
 PUBLIC_DECODE_CHAT_USERNAMES = {
     "psychic_ablitities_commentsc",
 }
@@ -1482,6 +1482,7 @@ app.add_handler(CommandHandler("start", handle_start))
 app.add_handler(CommandHandler("chatid", handle_chatid))
 app.add_handler(CommandHandler("decode", handle_decode_command))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_message))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=-1001752036351), handle_public_symbol_decode))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_public_symbol_decode))
 threading.Thread(target=run_web_server, daemon=True).start()
 print("Бот запущен!")
