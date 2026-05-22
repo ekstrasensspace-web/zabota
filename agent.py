@@ -689,6 +689,8 @@ forwarded_map = {}          # message_id пересланного сообщен
 known_users = load_known_users()
 processed_salebot_events = set()
 salebot_last_answer = {}
+processed_getcourse_events = set()
+getcourse_last_answer = {}
 print(f"Известных пользователей: {len(known_users)}")
 
 web_app = Flask(__name__)
@@ -794,6 +796,24 @@ def is_salebot_noise_message(message):
 def salebot_event_id(payload):
     return salebot_value(payload, "internal_id", "message_id", "id")
 
+def recursive_find(data, *keys):
+    """Ищем значение в неизвестной структуре webhook payload."""
+    if isinstance(data, dict):
+        for key in keys:
+            value = data.get(key)
+            if value is not None and value != "":
+                return value
+        for value in data.values():
+            found = recursive_find(value, *keys)
+            if found is not None and found != "":
+                return found
+    elif isinstance(data, list):
+        for item in data:
+            found = recursive_find(item, *keys)
+            if found is not None and found != "":
+                return found
+    return None
+
 def extract_salebot_payload(raw_payload):
     """SaleBot может прислать разные имена полей — вытаскиваем максимально гибко."""
     payload = raw_payload if isinstance(raw_payload, dict) else {}
@@ -866,6 +886,79 @@ def process_salebot_message(payload):
     )
     print(f"SaleBot reply sent to {client_id}", flush=True)
 
+def extract_getcourse_payload(raw_payload):
+    """GetCourse может прислать webhook в JSON или form-data с разными именами полей."""
+    payload = raw_payload if isinstance(raw_payload, dict) else {}
+    message = recursive_find(
+        payload,
+        "message",
+        "text",
+        "body",
+        "content",
+        "message_text",
+        "last_message",
+        "answer",
+    )
+    client_id = recursive_find(
+        payload,
+        "client_id",
+        "user_id",
+        "profile_id",
+        "account_id",
+        "vk_user_id",
+        "chat_id",
+        "dialog_id",
+        "id",
+    )
+    user_name = recursive_find(
+        payload,
+        "name",
+        "first_name",
+        "full_name",
+        "username",
+        "client_name",
+    ) or f"GetCourse {client_id}"
+    event_id = recursive_find(payload, "event_id", "message_id", "internal_id", "id")
+    return (
+        str(client_id) if client_id is not None else None,
+        str(message).strip() if message else "",
+        str(user_name),
+        str(event_id) if event_id is not None else None,
+    )
+
+def process_getcourse_message(payload):
+    client_id, user_message, user_name, event_id = extract_getcourse_payload(payload)
+
+    if not client_id or not user_message:
+        print(f"GetCourse webhook ignored: no client_id/message. Payload={payload}", flush=True)
+        return None
+    if event_id:
+        event_key = str(event_id)
+        if event_key in processed_getcourse_events:
+            print(f"GetCourse duplicate ignored: {event_key}", flush=True)
+            return None
+        processed_getcourse_events.add(event_key)
+        if len(processed_getcourse_events) > 1000:
+            processed_getcourse_events.clear()
+    if is_salebot_noise_message(user_message):
+        print(f"GetCourse noise ignored for client {client_id}: {user_message[:120]}", flush=True)
+        return None
+    now = time.time()
+    last_answer_at = getcourse_last_answer.get(client_id, 0)
+    if now - last_answer_at < 12:
+        print(f"GetCourse rate-limit ignored for client {client_id}: {user_message[:120]}", flush=True)
+        return None
+    getcourse_last_answer[client_id] = now
+
+    user_key = f"getcourse:{client_id}"
+    reply = generate_ai_reply(user_key, user_message)
+    telegram_notify_sync(
+        f"👤 GetCourse/VK — {user_name} ({client_id}):\n{user_message}\n\n"
+        f"🤖 Бот:\n{reply}"
+    )
+    print(f"GetCourse reply generated for {client_id}", flush=True)
+    return reply
+
 @web_app.get("/")
 def healthcheck():
     return jsonify({"ok": True, "service": "mas-bot"})
@@ -915,6 +1008,29 @@ def salebot_reply():
         f"🤖 Бот:\n{reply}"
     )
     return jsonify({"ok": True, "answer": reply, "client_id": client_id})
+
+@web_app.route("/getcourse/webhook", methods=["GET", "POST"])
+@web_app.route("/getcourse/webhook/", methods=["GET", "POST"])
+def getcourse_webhook():
+    if request.method == "GET":
+        print("GetCourse webhook GET check received", flush=True)
+        return jsonify({"ok": True, "endpoint": "getcourse/webhook", "method": "GET"})
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        payload = request.form.to_dict() or request.args.to_dict()
+
+    print(f"GetCourse webhook received: {payload}", flush=True)
+    reply = process_getcourse_message(payload)
+    if not reply:
+        return jsonify({"ok": True, "ignored": True})
+    return jsonify({
+        "ok": True,
+        "answer": reply,
+        "message": reply,
+        "text": reply,
+        "reply": reply,
+    })
 
 def run_web_server():
     port = int(os.environ.get("PORT", "8080"))
