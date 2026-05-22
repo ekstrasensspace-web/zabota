@@ -797,6 +797,12 @@ def is_salebot_noise_message(message):
 def salebot_event_id(payload):
     return salebot_value(payload, "internal_id", "message_id", "id")
 
+def salebot_channel_info(payload):
+    client_data = payload.get("client") if isinstance(payload.get("client"), dict) else {}
+    client_type = salebot_value(client_data, "client_type") or salebot_value(payload, "client_type")
+    group = salebot_value(client_data, "group") or salebot_value(payload, "group")
+    return f"group={group or 'unknown'}, client_type={client_type or 'unknown'}"
+
 def recursive_find(data, *keys):
     """Ищем значение в неизвестной структуре webhook payload."""
     if isinstance(data, dict):
@@ -891,10 +897,10 @@ def process_salebot_message(payload):
         if len(processed_salebot_events) > 1000:
             processed_salebot_events.clear()
     if is_salebot_outgoing(payload):
-        print(f"SaleBot outgoing ignored for client {client_id}", flush=True)
+        print(f"SaleBot outgoing ignored for client {client_id} ({salebot_channel_info(payload)})", flush=True)
         return
     if is_salebot_comment_payload(payload, user_message):
-        print(f"SaleBot comment ignored for client {client_id}: {user_message[:120]}", flush=True)
+        print(f"SaleBot comment ignored for client {client_id} ({salebot_channel_info(payload)}): {user_message[:120]}", flush=True)
         return
     if is_salebot_noise_message(user_message):
         print(f"SaleBot noise ignored for client {client_id}: {user_message[:120]}", flush=True)
@@ -914,10 +920,11 @@ def process_salebot_message(payload):
     send_salebot_message(client_id, reply)
 
     telegram_notify_sync(
-        f"👤 SaleBot — {user_name} ({client_id}):\n{user_message}\n\n"
+        f"👤 SaleBot — {user_name} ({client_id})\n"
+        f"{salebot_channel_info(payload)}:\n{user_message}\n\n"
         f"🤖 Бот:\n{reply}"
     )
-    print(f"SaleBot reply sent to {client_id}", flush=True)
+    print(f"SaleBot reply sent to {client_id} ({salebot_channel_info(payload)})", flush=True)
 
 def extract_getcourse_payload(raw_payload):
     """GetCourse может прислать webhook в JSON или form-data с разными именами полей."""
