@@ -583,6 +583,14 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 НЕ переходи к "передам специалисту" пока клиент не сказал что проверил Спам.
 ВАЖНО: все вопросы по доступу, письмам, личному кабинету и GetCourse автоматически уходят человеку на ручную проверку. Клиенту об этом можно сказать спокойно: "Я дополнительно передам это специалисту, чтобы доступ проверили без ошибки."
 
+ТЕХНИЧЕСКИЕ ВОПРОСЫ — НЕ ДОДУМЫВАЙ:
+- Если клиент пишет просто телефон, email, "не работает", "ошибка", "не получается" без деталей — НЕ угадывай что это про доступ, оплату или курс.
+- Сначала выясни что именно случилось: доступ, вход в личный кабинет, оплата, ссылка на чат, урок/запись, анкета или другое.
+- Не говори "специалист проверит доступ" пока клиент прямо не сказал, что проблема именно с доступом.
+- Телефон сам по себе не даёт понимания проблемы. Если клиент прислал только номер — ответь: "Спасибо, вижу номер. Подскажите, пожалуйста, по какому вопросу вы обращаетесь и что именно не получается?"
+- В техническом сценарии НЕ предлагай рассказать о составе курса и НЕ переходи к продаже, пока вопрос не решён.
+- Если после уточнений понятно, что бот не может решить сам — скажи что передаёшь специалисту и попроси нужные данные: курс, email оплаты, дата оплаты/скрин если есть.
+
 НЕ ПРИШЛА ССЫЛКА НА TELEGRAM-КАНАЛ ("не получила ссылку", "где ссылка на канал", "как попасть в чат"):
 - "Ссылка на Telegram-канал приходит на почту после подтверждения оплаты — проверьте папку Спам и Промоакции. Если не нашли — напишите email с которого оплачивали, передам специалисту."
 
@@ -763,6 +771,26 @@ def human_attention_reason(user_message, bot_reply=""):
     if any(marker in reply for marker in human_reply_markers):
         return "боту нужно уточнение у специалиста"
 
+    return None
+
+def is_bare_phone_message(text):
+    """Клиент прислал только номер телефона без вопроса."""
+    value = (text or "").strip()
+    if not value:
+        return False
+    digits = re.sub(r"\D", "", value)
+    if len(digits) < 7 or len(digits) > 15:
+        return False
+    # Разрешаем только цифры и типичные символы телефона. Если есть слова — это уже вопрос.
+    return re.sub(r"[\d\s()+\-.,]", "", value) == ""
+
+def clarification_reply_for_contact_only(text):
+    if is_bare_phone_message(text):
+        return (
+            "Спасибо, вижу номер.\n\n"
+            "Подскажите, пожалуйста, по какому вопросу вы обращаетесь и что именно не получается? "
+            "Это доступ к курсу, вход в личный кабинет, оплата, ссылка на чат или другой технический вопрос?"
+        )
     return None
 
 def build_human_attention_notice(source, user_name, client_id, user_message, bot_reply, reason, action_text):
@@ -1200,7 +1228,7 @@ def process_salebot_message(payload):
         return
 
     user_key = f"salebot:{client_id}"
-    reply = generate_ai_reply(user_key, user_message)
+    reply = clarification_reply_for_contact_only(user_message) or generate_ai_reply(user_key, user_message)
     send_salebot_message(client_id, reply)
 
     reason = human_attention_reason(user_message, reply)
@@ -1287,7 +1315,7 @@ def process_getcourse_message(payload):
     getcourse_last_answer[client_id] = now
 
     user_key = f"getcourse:{client_id}"
-    reply = generate_ai_reply(user_key, user_message)
+    reply = clarification_reply_for_contact_only(user_message) or generate_ai_reply(user_key, user_message)
     reason = human_attention_reason(user_message, reply)
     if reason:
         telegram_notify_sync(build_human_attention_notice(
@@ -1350,7 +1378,7 @@ def salebot_reply():
             "error": "no_message"
         })
 
-    reply = generate_ai_reply(f"salebot:{client_id}", user_message)
+    reply = clarification_reply_for_contact_only(user_message) or generate_ai_reply(f"salebot:{client_id}", user_message)
     reason = human_attention_reason(user_message, reply)
     if reason:
         telegram_notify_sync(build_human_attention_notice(
@@ -1569,7 +1597,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Обычный режим — отвечает бот
-    reply = generate_ai_reply(user_id, user_message)
+    reply = clarification_reply_for_contact_only(user_message) or generate_ai_reply(user_id, user_message)
     await update.message.reply_text(reply)
     attention_reason = human_attention_reason(user_message, reply)
 
