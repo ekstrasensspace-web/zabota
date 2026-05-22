@@ -289,10 +289,7 @@ PRICES = """
 • Тайные знания предсказаний — 15 000 ₽ / 150 € → рубли: https://ekstrasensschool.getcourse.ru/ancient_egyptian_divination_practices | евро: https://course.superabilitiesacademy.com/enroll/3407142?price_id=4319409
 • Путь к себе — 9 990 ₽ / 100 € → рубли: https://ekstrasensschool.getcourse.ru/buy_path-to-yourself_sale | евро: https://course.superabilitiesacademy.com/enroll/3410311?price_id=4322888
 • Пробуждение силы рода — 9 999 ₽ / 105 € → рубли: https://ekstrasensschool.getcourse.ru/buy_awakeningpowerbloodline-sale | евро: https://course.superabilitiesacademy.com/enroll/3408466?price_id=4320862
-• Матрица Звёздной Души мод.1 — 9 900 ₽ → https://superabilityacademy.com/Star_Matrix-1
-• Матрица Звёздной Души мод.2 — 15 000 ₽ → https://superabilityacademy.com/Star_Matrix-2
-• Матрица Звёздной Души мод.3 — 9 900 ₽ → https://superabilityacademy.com/Star_Matrix-3
-• Матрица Звёздной Души мод.4 — 9 900 ₽ → https://superabilityacademy.com/Star_Matrix-4
+• Тест «Матрица Звёздной Души» — диагностика/тест, НЕ курс → https://superabilityacademy.com/Star_Matrix
 • Врата Египетских Мистерий — 45 000 ₽ / 500 € → рубли: https://superabilityacademy.com/chenneling_Master | евро: https://course.superabilitiesacademy.com/enroll/3651390?price_id=4594075
 • Начать путь к предназначению — 9 900 ₽ → https://superabilityacademy.com/way
 • Коды Изобилия → https://course.superabilitiesacademy.com/enroll/3410377?price_id=4322960
@@ -550,6 +547,12 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 - Закрывай примерно так: "Есть специальный путь для тех кто только открывает свои способности — 5 шагов от первого знакомства с даром до понимания своего предназначения. Можно брать по одному, но в наборе выгоднее — 14 990 ₽ вместо 19 000 ₽. С чего хотите начать?"
 - Шаг 1 (490 ₽) — идеальный первый шаг для тех кто сомневается или боится
 
+ЗВЁЗДНЫЕ ЦИВИЛИЗАЦИИ / ЛЕМУРИЯ / ЛУНА — ВАЖНО:
+- "Матрица Звёздной Души" — это тест/диагностика, НЕ курс. У него нет модулей обучения. НИКОГДА не говори "курс Матрица Звёздной Души" и не придумывай модули, цены и программу.
+- Если клиент спрашивает как глубже узнать связь со звёздными цивилизациями, Лемурией, Луной, звёздной семьёй — отвечай мягко: это можно исследовать через тест "Матрица Звёздной Души" и через курс "Научный ченнелинг", где человек учится получать ответы из тонкого плана.
+- Не обещай точно определить происхождение в переписке без диагностики. Не говори категорично "вы из Лемурии" или "ваша цивилизация такая-то".
+- Безопасный ответ: "Да, такое можно исследовать глубже, но я не хочу давать вам поверхностную расшифровку в одну фразу. Для диагностики можно пройти тест Матрица Звёздной Души: https://superabilityacademy.com/Star_Matrix. А если хочется научиться получать такие ответы самостоятельно — вам ближе всего курс Научный ченнелинг, потому что там раскрывается связь с Высшим Я, наставниками и тонким планом."
+
 ДОСТУП К КУРСАМ — ВАЖНО:
 - Доступ к курсам открывается на 6 месяцев
 - НИКОГДА не говори "вечный доступ", "пожизненный доступ", "навсегда"
@@ -792,6 +795,53 @@ def clarification_reply_for_contact_only(text):
             "Это доступ к курсу, вход в личный кабинет, оплата, ссылка на чат или другой технический вопрос?"
         )
     return None
+
+def matrix_or_star_civilization_reply(text):
+    """Фиксированный ответ, чтобы не придумывать несуществующие курсы про звёздные цивилизации."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return None
+    correction_markers = (
+        "нет таких курсов", "нет такого курса", "такого курса нет",
+        "таких курсов нет", "не существует такого курса", "вы придумали",
+        "бот придумал", "это не курс", "матрица звездной души",
+        "матрица звёздной души", "star_matrix",
+    )
+    if any(marker in normalized for marker in correction_markers):
+        return (
+            "Вы правы, спасибо что поправили. У нас нет курса «Матрица Звёздной Души» с модулями — "
+            "это тест/диагностика, а не обучение.\n\n"
+            "Если хотите глубже исследовать связь со звёздными цивилизациями, Лемурией, Луной и своим происхождением, "
+            "можно начать с теста «Матрица Звёздной Души»: https://superabilityacademy.com/Star_Matrix\n\n"
+            "А если хочется научиться получать такие ответы самостоятельно, тогда ближе всего курс «Научный ченнелинг». "
+            "На нём раскрывается связь с Высшим Я, духовными наставниками и тонким планом."
+        )
+    star_markers = (
+        "звезд", "звёзд", "лемур", "лимур", "цивилизац", "плеяд",
+        "арктур", "сириус", "орион", "андромед", "звездная семья",
+        "звёздная семья", "звездные корни", "звёздные корни",
+        "матрица звездной души", "матрица звёздной души",
+    )
+    asks_deeper = (
+        "узнать", "глубже", "связ", "принадлеж", "откуда", "кто я",
+        "корни", "происхожд", "цивилизац",
+    )
+    if not any(marker in normalized for marker in star_markers):
+        return None
+    if not any(marker in normalized for marker in asks_deeper):
+        return None
+    return (
+        "Да, такую связь можно исследовать глубже. Но я не хочу давать вам поверхностную расшифровку в одну фразу — "
+        "тема звёздных цивилизаций, Лемурии и связи с Луной обычно раскрывается через диагностику и личное чувствование.\n\n"
+        "Начните с теста «Матрица Звёздной Души», он поможет точнее увидеть ваши связи и направление пути: "
+        "https://superabilityacademy.com/Star_Matrix\n\n"
+        "А если хочется научиться получать такие ответы самостоятельно — вам ближе всего курс «Научный ченнелинг». "
+        "Там раскрывается связь с Высшим Я, духовными наставниками и тонким планом, чтобы вы могли не просто читать чужую расшифровку, "
+        "а сами получать ответы о себе и своём происхождении."
+    )
+
+def predefined_reply_for_message(text):
+    return clarification_reply_for_contact_only(text) or matrix_or_star_civilization_reply(text)
 
 def build_human_attention_notice(source, user_name, client_id, user_message, bot_reply, reason, action_text):
     return (
@@ -1228,7 +1278,7 @@ def process_salebot_message(payload):
         return
 
     user_key = f"salebot:{client_id}"
-    reply = clarification_reply_for_contact_only(user_message) or generate_ai_reply(user_key, user_message)
+    reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
     send_salebot_message(client_id, reply)
 
     reason = human_attention_reason(user_message, reply)
@@ -1315,7 +1365,7 @@ def process_getcourse_message(payload):
     getcourse_last_answer[client_id] = now
 
     user_key = f"getcourse:{client_id}"
-    reply = clarification_reply_for_contact_only(user_message) or generate_ai_reply(user_key, user_message)
+    reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
     reason = human_attention_reason(user_message, reply)
     if reason:
         telegram_notify_sync(build_human_attention_notice(
@@ -1378,7 +1428,7 @@ def salebot_reply():
             "error": "no_message"
         })
 
-    reply = clarification_reply_for_contact_only(user_message) or generate_ai_reply(f"salebot:{client_id}", user_message)
+    reply = predefined_reply_for_message(user_message) or generate_ai_reply(f"salebot:{client_id}", user_message)
     reason = human_attention_reason(user_message, reply)
     if reason:
         telegram_notify_sync(build_human_attention_notice(
@@ -1597,7 +1647,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Обычный режим — отвечает бот
-    reply = clarification_reply_for_contact_only(user_message) or generate_ai_reply(user_id, user_message)
+    reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_id, user_message)
     await update.message.reply_text(reply)
     attention_reason = human_attention_reason(user_message, reply)
 
