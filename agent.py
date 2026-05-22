@@ -1460,12 +1460,28 @@ def extract_getcourse_payload(raw_payload):
 def process_getcourse_message(payload):
     # Игнорируем сообщения от ботов (например mac_academy_bot шлёт воронку)
     try:
-        source = payload.get("sourcePayload", {})
-        msg_from = (source.get("object", {}) or {}).get("message", {}).get("from", {})
-        if not msg_from:
-            msg_from = source.get("message", {}).get("from", {})
-        if isinstance(msg_from, dict) and msg_from.get("is_bot"):
-            print(f"GetCourse bot-message ignored (from bot: {msg_from.get('username', '?')})", flush=True)
+        # Проверяем все возможные места где может быть from.is_bot
+        def _is_bot_sender(p):
+            if not isinstance(p, dict):
+                return False
+            # top-level from
+            f = p.get("from", {})
+            if isinstance(f, dict) and f.get("is_bot"):
+                return True
+            # sourcePayload.object.message.from
+            src = p.get("sourcePayload", {}) or {}
+            f2 = (src.get("object", {}) or {}).get("message", {}).get("from", {})
+            if isinstance(f2, dict) and f2.get("is_bot"):
+                return True
+            # sourcePayload.message.from
+            f3 = src.get("message", {}).get("from", {})
+            if isinstance(f3, dict) and f3.get("is_bot"):
+                return True
+            return False
+
+        if _is_bot_sender(payload):
+            bot_name = (payload.get("from", {}) or {}).get("username", "?")
+            print(f"GetCourse bot-message ignored (from bot: {bot_name})", flush=True)
             return None
     except Exception:
         pass
