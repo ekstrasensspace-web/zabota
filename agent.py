@@ -9,9 +9,13 @@ import re
 import time
 import threading
 import asyncio
+import logging
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 time.sleep(10)  # Ждём завершения старого процесса
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.WARNING)
 
 CLAUDE_API_KEY = os.environ["CLAUDE_API_KEY"]
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
@@ -23,8 +27,9 @@ TELETHON_SESSION = os.environ.get("TELETHON_SESSION", "")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SUPPORT_BOT_USERNAME = "zabotamacbot"
 PUBLIC_DECODE_CHAT_ID = -1001752036351
+PUBLIC_DECODE_CHAT_USERNAME = "psychic_ablitities_commentsc"
 PUBLIC_DECODE_CHAT_USERNAMES = {
-    "psychic_ablitities_commentsc",
+    PUBLIC_DECODE_CHAT_USERNAME,
 }
 PUBLIC_DECODE_CHAT_IDS = {str(PUBLIC_DECODE_CHAT_ID)} | {
     chat_id.strip()
@@ -1308,7 +1313,28 @@ async def telethon_public_watcher():
         TELEGRAM_API_HASH,
     )
 
-    @tg_client.on(events.NewMessage(chats=PUBLIC_DECODE_CHAT_ID))
+    await tg_client.start()
+
+    me = await tg_client.get_me()
+    print(
+        f"Telethon watcher account: id={me.id}, username={getattr(me, 'username', None)}",
+        flush=True,
+    )
+
+    try:
+        target_chat = await tg_client.get_entity(PUBLIC_DECODE_CHAT_USERNAME)
+        print(
+            "Telethon watcher resolved comments chat: "
+            f"id={getattr(target_chat, 'id', None)}, "
+            f"title={getattr(target_chat, 'title', None)}, "
+            f"username={getattr(target_chat, 'username', None)}",
+            flush=True,
+        )
+    except Exception as exc:
+        print(f"Telethon watcher cannot resolve @{PUBLIC_DECODE_CHAT_USERNAME}: {exc}", flush=True)
+        return
+
+    @tg_client.on(events.NewMessage(chats=target_chat))
     async def on_public_comment(event):
         if event.out:
             return
@@ -1338,7 +1364,6 @@ async def telethon_public_watcher():
         except Exception as exc:
             print(f"Telethon public reply error: {exc}", flush=True)
 
-    await tg_client.start()
     print("Telethon watcher started for public comments", flush=True)
     await tg_client.run_until_disconnected()
 
