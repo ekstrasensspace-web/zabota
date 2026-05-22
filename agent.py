@@ -953,9 +953,13 @@ def generate_ai_reply(conversation_key, user_message):
 
     try:
         response = client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-haiku-4-5",
             max_tokens=1024,
-            system=build_system_prompt(similar),
+            system=[{
+                "type": "text",
+                "text": build_system_prompt(similar),
+                "cache_control": {"type": "ephemeral"}
+            }],
             messages=conversation_history[conversation_key]
         )
         reply = response.content[0].text
@@ -1108,7 +1112,7 @@ def generate_symbol_decode_reply(user_message, language="auto"):
     )
     try:
         response = client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-haiku-4-5",
             max_tokens=600,
             system=(
                 "Ты сотрудник Международной Академии Сверхспособностей. "
