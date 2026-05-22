@@ -1271,7 +1271,19 @@ async def handle_public_symbol_decode(update: Update, context: ContextTypes.DEFA
         return
     if message.from_user and message.from_user.is_bot:
         return
+
+    print(
+        "Telegram public message seen: "
+        f"chat_id={chat.id}, title={chat.title}, username={getattr(chat, 'username', None)}, "
+        f"text={message.text[:120]}",
+        flush=True,
+    )
     if not is_allowed_public_decode_chat(chat):
+        print(
+            "Telegram public chat ignored: "
+            f"chat_id={chat.id}, title={chat.title}, username={getattr(chat, 'username', None)}",
+            flush=True,
+        )
         return
 
     user_message = message.text.strip()
