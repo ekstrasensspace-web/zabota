@@ -712,9 +712,24 @@ processed_salebot_events = set()
 salebot_last_answer = {}
 processed_getcourse_events = set()
 getcourse_last_answer = {}
+processed_public_messages = set()
+processed_public_lock = threading.Lock()
 print(f"Известных пользователей: {len(known_users)}")
 
 web_app = Flask(__name__)
+
+def mark_public_message_processed(chat_id, message_id):
+    """Не даём Bot API и Telethon ответить на один комментарий дважды."""
+    if not chat_id or not message_id:
+        return True
+    key = f"{chat_id}:{message_id}"
+    with processed_public_lock:
+        if key in processed_public_messages:
+            return False
+        processed_public_messages.add(key)
+        if len(processed_public_messages) > 2000:
+            processed_public_messages.clear()
+        return True
 
 def find_similar(query, n=3):
     if model is None or collection is None:
@@ -1345,6 +1360,9 @@ async def telethon_public_watcher():
         text = (event.raw_text or "").strip()
         if not text or text.startswith("/"):
             return
+        if not mark_public_message_processed(event.chat_id, event.id):
+            print(f"Telethon public duplicate ignored: chat_id={event.chat_id}, message_id={event.id}", flush=True)
+            return
 
         print(
             f"Telethon public message seen: chat_id={event.chat_id}, message_id={event.id}, text={text[:120]}",
@@ -1501,6 +1519,10 @@ async def handle_public_symbol_decode(update: Update, context: ContextTypes.DEFA
         return
 
     user_message = message.text.strip()
+    if not mark_public_message_processed(chat.id, message.message_id):
+        print(f"Telegram public duplicate ignored: chat_id={chat.id}, message_id={message.message_id}", flush=True)
+        return
+
     if looks_like_symbol_decode_request(user_message):
         reply = generate_symbol_decode_reply(user_message, language="ru")
         await message.reply_text(reply)
