@@ -1492,28 +1492,23 @@ def extract_getcourse_payload(raw_payload):
 def process_getcourse_message(payload):
     # Игнорируем сообщения от ботов (например mac_academy_bot шлёт воронку)
     try:
-        # Проверяем все возможные места где может быть from.is_bot
-        def _is_bot_sender(p):
-            if not isinstance(p, dict):
-                return False
-            # top-level from
-            f = p.get("from", {})
+        def _find_bot_sender(obj, depth=0):
+            """Рекурсивно ищет from.is_bot=True в любом месте payload."""
+            if depth > 6 or not isinstance(obj, dict):
+                return None
+            f = obj.get("from")
             if isinstance(f, dict) and f.get("is_bot"):
-                return True
-            # sourcePayload.object.message.from
-            src = p.get("sourcePayload", {}) or {}
-            f2 = (src.get("object", {}) or {}).get("message", {}).get("from", {})
-            if isinstance(f2, dict) and f2.get("is_bot"):
-                return True
-            # sourcePayload.message.from
-            f3 = src.get("message", {}).get("from", {})
-            if isinstance(f3, dict) and f3.get("is_bot"):
-                return True
-            return False
+                return f.get("username", "unknown_bot")
+            for v in obj.values():
+                if isinstance(v, dict):
+                    result = _find_bot_sender(v, depth + 1)
+                    if result:
+                        return result
+            return None
 
-        if _is_bot_sender(payload):
-            bot_name = (payload.get("from", {}) or {}).get("username", "?")
-            print(f"GetCourse bot-message ignored (from bot: {bot_name})", flush=True)
+        bot_sender = _find_bot_sender(payload)
+        if bot_sender:
+            print(f"GetCourse bot-message ignored (from bot: {bot_sender})", flush=True)
             return None
     except Exception:
         pass
