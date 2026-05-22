@@ -15,7 +15,7 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 SALEBOT_API_KEY = os.environ.get("SALEBOT_API_KEY", "")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SUPPORT_BOT_USERNAME = os.environ.get("SUPPORT_BOT_USERNAME", "zabotamacbot")
+SUPPORT_BOT_USERNAME = "zabotamacbot"
 PUBLIC_DECODE_CHAT_USERNAMES = {
     "psychic_ablitities_commentsc",
 }
@@ -932,9 +932,9 @@ def looks_like_public_question(text):
 
 def public_question_redirect_reply():
     return (
-        "По личным вопросам, оплате, доступам и подбору курса напишите, пожалуйста, "
-        f"в личку боту заботы: @{SUPPORT_BOT_USERNAME}\n\n"
-        "Там мы сможем спокойно посмотреть вашу ситуацию и подсказать точнее."
+        "По вопросам оплаты, доступа и подбора курса напишите, пожалуйста, "
+        f"в службу заботы: https://t.me/{SUPPORT_BOT_USERNAME}\n\n"
+        "В комментариях я отвечаю на расшифровки символов, а личные вопросы лучше разобрать в отдельном диалоге."
     )
 
 def telegram_notify_sync(text):
