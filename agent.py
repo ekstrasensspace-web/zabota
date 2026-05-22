@@ -15,6 +15,10 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 SALEBOT_API_KEY = os.environ.get("SALEBOT_API_KEY", "")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SUPPORT_BOT_USERNAME = os.environ.get("SUPPORT_BOT_USERNAME", "Zabota_mac_academy_bot")
+PUBLIC_DECODE_CHAT_USERNAMES = {
+    "psychic_ablitities_commentsc",
+}
 
 # ============================================================
 # ЗАПИСИ ЭФИРОВ (обновляйте по мере появления новых)
@@ -737,6 +741,84 @@ def generate_ai_reply(conversation_key, user_message):
     conversation_history[conversation_key].append({"role": "assistant", "content": reply})
     return reply
 
+COLOR_WORDS = (
+    "красный", "красная", "червоний", "червона",
+    "оранжевый", "оранжевая", "помаранчевий", "помаранчева",
+    "желтый", "жёлтый", "желтая", "жёлтая", "жовтий", "жовта",
+    "зеленый", "зелёный", "зеленая", "зелёная", "зелений", "зелена",
+    "голубой", "голубая", "блакитний", "блакитна",
+    "синий", "синяя", "синій", "синя",
+    "фиолетовый", "фиолетовая", "фіолетовий", "фіолетова",
+    "белый", "белая", "білий", "біла",
+    "черный", "чёрный", "черная", "чёрная", "чорний", "чорна",
+    "золотой", "золотая", "золотий", "золота",
+    "серебряный", "серебряная", "срібний", "срібна",
+)
+
+SYMBOL_WORDS = (
+    "волк", "вовк", "птица", "птах", "орел", "орёл", "сова", "лев", "тигр",
+    "дракон", "змея", "кіт", "кот", "кошка", "лошадь", "конь", "олень",
+    "бесконечность", "нескінченність", "знак", "символ", "руна", "ключ",
+    "сердце", "серце", "звезда", "зірка", "луна", "місяць", "солнце", "сонце",
+    "крест", "спираль", "треугольник", "трикутник", "круг", "коло", "квадрат",
+    "дерево", "дерево", "цветок", "квітка", "глаз", "око", "врата", "ворота",
+)
+
+def looks_like_symbol_decode_request(text):
+    normalized = re.sub(r"\s+", " ", text.lower()).strip()
+    if len(normalized) > 220:
+        return False
+    has_color = any(word in normalized for word in COLOR_WORDS)
+    has_number = re.search(r"(^|[^\w])\d{1,2}([^\w]|$)", normalized) is not None
+    has_symbol = any(word in normalized for word in SYMBOL_WORDS)
+    has_separator = "," in normalized or "\n" in text or ";" in normalized
+    asks_decode = any(word in normalized for word in ("расшифр", "розшифр", "что значит", "що означає"))
+    return has_color and (has_number or has_symbol) and (has_separator or asks_decode or len(normalized.split()) <= 12)
+
+def generate_symbol_decode_reply(user_message):
+    response = client.messages.create(
+        model="claude-opus-4-5",
+        max_tokens=600,
+        system=(
+            "Ты сотрудник Международной Академии Сверхспособностей. "
+            "Тебе прислали цвет, цифру и символы из короткого видео Натальи. "
+            "Сделай теплую мистическую расшифровку на языке клиента: русский или украинский. "
+            "Не ставь диагнозы, не обещай исцеление и не говори категорично о судьбе. "
+            "Пиши живо, красиво, 3-5 коротких абзацев. "
+            "Объясни цвет, цифру и символы как подсказки о силе души, потенциале и пути. "
+            "Не используй markdown, звездочки и списки. "
+            "В конце мягко пригласи пройти полный тест: "
+            "Чтобы узнать свои сверхспособности глубже, пройдите полный тест: https://star-soul-quest.lovable.app"
+        ),
+        messages=[{"role": "user", "content": user_message}],
+    )
+    return response.content[0].text
+
+def is_allowed_public_decode_chat(chat):
+    username = (getattr(chat, "username", None) or "").lstrip("@").lower()
+    return username in PUBLIC_DECODE_CHAT_USERNAMES
+
+def looks_like_public_question(text):
+    normalized = text.strip()
+    if not normalized:
+        return False
+    if "?" in normalized:
+        return True
+    question_starts = (
+        "как ", "когда ", "куда ", "где ", "сколько ", "почему ", "зачем ",
+        "можно ", "подскажите", "скажите", "что делать", "как оплатить",
+        "як ", "коли ", "куди ", "де ", "скільки ", "чому ", "можна ",
+        "підкажіть", "скажіть", "що робити",
+    )
+    return normalized.lower().startswith(question_starts)
+
+def public_question_redirect_reply():
+    return (
+        "По личным вопросам, оплате, доступам и подбору курса напишите, пожалуйста, "
+        f"в личку боту заботы: @{SUPPORT_BOT_USERNAME}\n\n"
+        "Там мы сможем спокойно посмотреть вашу ситуацию и подсказать точнее."
+    )
+
 def telegram_notify_sync(text):
     """Синхронное уведомление в канал мониторинга для вебхуков SaleBot."""
     try:
@@ -1182,11 +1264,53 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass  # не ломаем бота если уведомление не дошло
 
+async def handle_public_symbol_decode(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.effective_message
+    chat = update.effective_chat
+    if not message or not chat or not message.text:
+        return
+    if message.from_user and message.from_user.is_bot:
+        return
+    if not is_allowed_public_decode_chat(chat):
+        return
+
+    user_message = message.text.strip()
+    if looks_like_symbol_decode_request(user_message):
+        reply = generate_symbol_decode_reply(user_message)
+        await message.reply_text(reply)
+
+        try:
+            await context.bot.send_message(
+                chat_id=LOG_CHANNEL_ID,
+                text=(
+                    f"📣 Telegram комментарии — {chat.title or chat.id} ({chat.id}):\n"
+                    f"{user_message}\n\n"
+                    f"🤖 Расшифровка:\n{reply}"
+                )[:3900],
+            )
+        except Exception:
+            pass
+        return
+
+    if looks_like_public_question(user_message):
+        await message.reply_text(public_question_redirect_reply())
+        try:
+            await context.bot.send_message(
+                chat_id=LOG_CHANNEL_ID,
+                text=(
+                    f"📣 Telegram комментарии — вопрос перенаправлен в личку боту\n"
+                    f"{chat.title or chat.id} ({chat.id}):\n{user_message}"
+                )[:3900],
+            )
+        except Exception:
+            pass
+
 from telegram.ext import filters as tg_filters
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(CommandHandler("start", handle_start))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_message))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_public_symbol_decode))
 threading.Thread(target=run_web_server, daemon=True).start()
 print("Бот запущен!")
-app.run_polling(drop_pending_updates=True)
+app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
