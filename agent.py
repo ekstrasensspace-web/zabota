@@ -1458,6 +1458,18 @@ def extract_getcourse_payload(raw_payload):
     )
 
 def process_getcourse_message(payload):
+    # Игнорируем сообщения от ботов (например mac_academy_bot шлёт воронку)
+    try:
+        source = payload.get("sourcePayload", {})
+        msg_from = (source.get("object", {}) or {}).get("message", {}).get("from", {})
+        if not msg_from:
+            msg_from = source.get("message", {}).get("from", {})
+        if isinstance(msg_from, dict) and msg_from.get("is_bot"):
+            print(f"GetCourse bot-message ignored (from bot: {msg_from.get('username', '?')})", flush=True)
+            return None
+    except Exception:
+        pass
+
     client_id, user_message, user_name, event_id = extract_getcourse_payload(payload)
 
     if not client_id or not user_message:
