@@ -8,18 +8,25 @@ import os
 import re
 import time
 import threading
+import asyncio
+from telethon import TelegramClient, events
+from telethon.sessions import StringSession
 time.sleep(10)  # Ждём завершения старого процесса
 
 CLAUDE_API_KEY = os.environ["CLAUDE_API_KEY"]
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 SALEBOT_API_KEY = os.environ.get("SALEBOT_API_KEY", "")
+TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID", "")
+TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH", "")
+TELETHON_SESSION = os.environ.get("TELETHON_SESSION", "")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SUPPORT_BOT_USERNAME = "zabotamacbot"
+PUBLIC_DECODE_CHAT_ID = -1001752036351
 PUBLIC_DECODE_CHAT_USERNAMES = {
     "psychic_ablitities_commentsc",
 }
-PUBLIC_DECODE_CHAT_IDS = {"-1001752036351"} | {
+PUBLIC_DECODE_CHAT_IDS = {str(PUBLIC_DECODE_CHAT_ID)} | {
     chat_id.strip()
     for chat_id in os.environ.get("PUBLIC_DECODE_CHAT_IDS", "").split(",")
     if chat_id.strip()
@@ -948,6 +955,19 @@ def telegram_notify_sync(text):
     except Exception as exc:
         print(f"Не удалось отправить уведомление в Telegram: {exc}", flush=True)
 
+def send_bot_message_sync(chat_id, text, reply_to_message_id=None):
+    payload = {"chat_id": chat_id, "text": text[:3900]}
+    if reply_to_message_id:
+        payload["reply_to_message_id"] = reply_to_message_id
+        payload["allow_sending_without_reply"] = True
+    response = requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+        json=payload,
+        timeout=20,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"Telegram sendMessage error {response.status_code}: {response.text[:500]}")
+
 def salebot_value(payload, *keys):
     for key in keys:
         value = payload.get(key)
@@ -1277,6 +1297,57 @@ def run_web_server():
     print(f"HTTP сервер запущен на порту {port}", flush=True)
     web_app.run(host="0.0.0.0", port=port)
 
+async def telethon_public_watcher():
+    if not TELEGRAM_API_ID or not TELEGRAM_API_HASH or not TELETHON_SESSION:
+        print("Telethon watcher disabled: TELEGRAM_API_ID/API_HASH/TELETHON_SESSION не заданы", flush=True)
+        return
+
+    tg_client = TelegramClient(
+        StringSession(TELETHON_SESSION),
+        int(TELEGRAM_API_ID),
+        TELEGRAM_API_HASH,
+    )
+
+    @tg_client.on(events.NewMessage(chats=PUBLIC_DECODE_CHAT_ID))
+    async def on_public_comment(event):
+        if event.out:
+            return
+        sender = await event.get_sender()
+        if getattr(sender, "bot", False):
+            return
+
+        text = (event.raw_text or "").strip()
+        if not text or text.startswith("/"):
+            return
+
+        print(
+            f"Telethon public message seen: chat_id={event.chat_id}, message_id={event.id}, text={text[:120]}",
+            flush=True,
+        )
+
+        if looks_like_symbol_decode_request(text):
+            reply = await asyncio.to_thread(generate_symbol_decode_reply, text, "ru")
+        elif looks_like_public_question(text):
+            reply = public_question_redirect_reply()
+        else:
+            return
+
+        try:
+            await asyncio.to_thread(send_bot_message_sync, PUBLIC_DECODE_CHAT_ID, reply, event.id)
+            print(f"Telethon public reply sent: message_id={event.id}", flush=True)
+        except Exception as exc:
+            print(f"Telethon public reply error: {exc}", flush=True)
+
+    await tg_client.start()
+    print("Telethon watcher started for public comments", flush=True)
+    await tg_client.run_until_disconnected()
+
+def run_telethon_watcher():
+    try:
+        asyncio.run(telethon_public_watcher())
+    except Exception as exc:
+        print(f"Telethon watcher crashed: {exc}", flush=True)
+
 async def notify_admin(context, user_id, user_name, user_message, bot_reply=None):
     """Отправляет диалог в канал мониторинга."""
     if bot_reply:
@@ -1485,5 +1556,6 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatTyp
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=-1001752036351), handle_public_symbol_decode))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_public_symbol_decode))
 threading.Thread(target=run_web_server, daemon=True).start()
+threading.Thread(target=run_telethon_watcher, daemon=True).start()
 print("Бот запущен!")
 app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
