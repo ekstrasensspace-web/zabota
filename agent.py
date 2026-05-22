@@ -19,6 +19,11 @@ SUPPORT_BOT_USERNAME = os.environ.get("SUPPORT_BOT_USERNAME", "Zabota_mac_academ
 PUBLIC_DECODE_CHAT_USERNAMES = {
     "psychic_ablitities_commentsc",
 }
+PUBLIC_DECODE_CHAT_IDS = {
+    chat_id.strip()
+    for chat_id in os.environ.get("PUBLIC_DECODE_CHAT_IDS", "").split(",")
+    if chat_id.strip()
+}
 
 # ============================================================
 # ЗАПИСИ ЭФИРОВ (обновляйте по мере появления новых)
@@ -814,7 +819,7 @@ def generate_symbol_decode_reply(user_message):
 
 def is_allowed_public_decode_chat(chat):
     username = (getattr(chat, "username", None) or "").lstrip("@").lower()
-    return username in PUBLIC_DECODE_CHAT_USERNAMES
+    return username in PUBLIC_DECODE_CHAT_USERNAMES or str(chat.id) in PUBLIC_DECODE_CHAT_IDS
 
 def looks_like_public_question(text):
     normalized = text.strip()
@@ -1335,10 +1340,52 @@ async def handle_public_symbol_decode(update: Update, context: ContextTypes.DEFA
         except Exception:
             pass
 
+async def handle_chatid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    message = update.effective_message
+    if not chat or not message:
+        return
+    username = getattr(chat, "username", None)
+    username_text = f"@{username}" if username else "нет"
+    text = (
+        "CHAT INFO\n"
+        f"id: {chat.id}\n"
+        f"type: {chat.type}\n"
+        f"title: {chat.title}\n"
+        f"username: {username_text}"
+    )
+    print(
+        f"Telegram /chatid received: chat_id={chat.id}, type={chat.type}, title={chat.title}, username={username}",
+        flush=True,
+    )
+    await message.reply_text(text)
+
+async def handle_decode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.effective_message
+    chat = update.effective_chat
+    if not message or not chat:
+        return
+
+    text = " ".join(context.args).strip()
+    if not text and message.reply_to_message and message.reply_to_message.text:
+        text = message.reply_to_message.text.strip()
+    if not text:
+        await message.reply_text("Напишите так: /decode Фиолетовый, 7, знак бесконечности, волк")
+        return
+
+    print(
+        f"Telegram /decode received: chat_id={chat.id}, title={chat.title}, username={getattr(chat, 'username', None)}, text={text[:120]}",
+        flush=True,
+    )
+    reply = generate_symbol_decode_reply(text)
+    await message.reply_text(reply)
+
 from telegram.ext import filters as tg_filters
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(CommandHandler("start", handle_start))
+app.add_handler(CommandHandler("chatid", handle_chatid))
+app.add_handler(CommandHandler("decode", handle_decode_command))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_message))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_public_symbol_decode))
 threading.Thread(target=run_web_server, daemon=True).start()
