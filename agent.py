@@ -19,7 +19,7 @@ SUPPORT_BOT_USERNAME = os.environ.get("SUPPORT_BOT_USERNAME", "Zabota_mac_academ
 PUBLIC_DECODE_CHAT_USERNAMES = {
     "psychic_ablitities_commentsc",
 }
-PUBLIC_DECODE_CHAT_IDS = {
+PUBLIC_DECODE_CHAT_IDS = {"-1001752036351"} | {
     chat_id.strip()
     for chat_id in os.environ.get("PUBLIC_DECODE_CHAT_IDS", "").split(",")
     if chat_id.strip()
