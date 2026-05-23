@@ -731,7 +731,7 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
         return None
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
     )
     full_prompt = system_prompt + "\n\n---\nСообщение клиента:\n" + user_message
     body = {
