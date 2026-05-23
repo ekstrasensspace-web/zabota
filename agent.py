@@ -1335,6 +1335,47 @@ def recursive_find(data, *keys):
                 return found
     return None
 
+def is_salebot_form_submission(payload):
+    """Анкета/заявка GetCourse — не вопрос клиента, не отвечаем.
+
+    Признаки: поля сделки/заказа GetCourse (market_id, getcourse_deal_id,
+    getcourse_payment_link, link_anketa, result=True/1) или webhook о
+    прохождении шага воронки (event_type содержит 'deal'/'order'/'payment').
+    """
+    if not isinstance(payload, dict):
+        return False
+
+    # Проверяем поля верхнего уровня и вложенный client
+    client_data = payload.get("client") if isinstance(payload.get("client"), dict) else {}
+    order_vars = client_data.get("order_variables") if isinstance(client_data.get("order_variables"), dict) else {}
+
+    # Поля, характерные для сделки/заказа GetCourse
+    deal_keys = (
+        "market_id", "market_price", "market_title",
+        "getcourse_deal_id", "getcourse_payment_link",
+        "link_anketa", "link_anketa2",
+        "link_avtoweb_povtorruny_1", "link_avtowebruny_1",
+        "proxy_id", "proxy_ml",
+    )
+    for source in (payload, client_data, order_vars):
+        if not isinstance(source, dict):
+            continue
+        for key in deal_keys:
+            if key in source:
+                return True
+
+    # result=True/1 в верхнем уровне — итог отправки формы
+    result_val = payload.get("result")
+    if result_val in (True, 1, "True", "true", "1"):
+        return True
+
+    # event_type указывает на сделку/оплату
+    event_type = str(payload.get("event_type") or "").lower()
+    if any(word in event_type for word in ("deal", "order", "payment", "purchase", "lead")):
+        return True
+
+    return False
+
 def is_salebot_comment_payload(payload, message):
     """SaleBot может присылать комментарии как webhook, но ИИ должен отвечать только в личных сообщениях."""
     normalized = message.lower()
@@ -1412,6 +1453,9 @@ def process_salebot_message(payload):
             processed_salebot_events.clear()
     if is_salebot_outgoing(payload):
         print(f"SaleBot outgoing ignored for client {client_id} ({salebot_channel_info(payload)})", flush=True)
+        return
+    if is_salebot_form_submission(payload):
+        print(f"SaleBot form/anketa ignored for client {client_id}: {user_message[:120]}", flush=True)
         return
     if is_salebot_comment_payload(payload, user_message):
         print(f"SaleBot comment ignored for client {client_id} ({salebot_channel_info(payload)}): {user_message[:120]}", flush=True)
