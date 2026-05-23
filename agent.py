@@ -977,12 +977,6 @@ def build_system_prompt(similar=""):
         similar_section="=== ПОХОЖИЕ ДИАЛОГИ ИЗ ПРАКТИКИ ===\n" + similar
     )
 
-def fallback_reply():
-    return (
-        "Спасибо за ваш вопрос 🙏 Я передаю его специалисту — "
-        "вам ответят в ближайшее время."
-    )
-
 def generate_ai_reply(conversation_key, user_message):
     """Единый мозг бота для Telegram, SaleBot и будущих каналов."""
     if conversation_key not in conversation_history:
@@ -1003,10 +997,9 @@ def generate_ai_reply(conversation_key, user_message):
     full_user = (history_text + f"Клиент: {user_message}").strip()
 
     reply = call_ai(system, full_user, max_tokens=1024)
-    if not reply:
-        reply = fallback_reply()
-    conversation_history[conversation_key].append({"role": "assistant", "content": reply})
-    return reply
+    if reply:
+        conversation_history[conversation_key].append({"role": "assistant", "content": reply})
+    return reply  # None если AI не ответил — бот молчит, команда отвечает вручную
 
 COLOR_WORDS = (
     "красный", "красная", "красного", "красные", "червоний", "червона",
@@ -1484,6 +1477,9 @@ def process_salebot_message(payload):
 
     user_key = f"salebot:{client_id}"
     reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
+    if not reply:
+        print(f"SaleBot no reply (AI silent) for client {client_id}: {user_message[:120]}", flush=True)
+        return
     send_salebot_message(client_id, reply)
 
     reason = human_attention_reason(user_message, reply)
