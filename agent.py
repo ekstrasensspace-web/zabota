@@ -1271,6 +1271,18 @@ def looks_like_explicit_client_request(message):
     if looks_like_symbol_decode_request(message):
         return True
 
+    # Приветствия — живой человек начинает разговор
+    greeting_markers = (
+        "привет", "здравствуй", "добрый день", "добрый вечер", "доброе утро",
+        "доброго", "здравствуйте", "хай ", "хай!", "hello",
+        "вітаю", "добридень", "доброго ранку", "добрий вечір",
+        "интересует", "интересно", "расскажи", "расскажите", "хочу узнать",
+        "хочу записаться", "хочу купить", "хочу поступить",
+        "есть вопрос", "є питання",
+    )
+    if any(marker in normalized for marker in greeting_markers):
+        return True
+
     request_markers = (
         "помог", "помощ", "подскаж", "скажите", "хочу", "нужно", "нужна",
         "можно", "как ", "когда ", "куда ", "где ", "сколько ", "почему ",
@@ -1289,24 +1301,19 @@ def looks_like_explicit_client_request(message):
     return any(marker in normalized for marker in request_markers)
 
 def is_passive_funnel_message(message):
-    """Не отвечаем на тексты автоворонок/прогрева без явного вопроса клиента."""
+    """Не отвечаем ни на что, кроме явных вопросов/запросов клиента.
+
+    Логика: если это не явный запрос клиента — молчим. Так отсекаем
+    UTM-метки, однословные теги, тексты воронок и весь прочий шум.
+    """
     normalized = re.sub(r"\s+", " ", (message or "").lower()).strip()
     if not normalized:
         return True
-
-    funnel_markers = (
-        "начал воронку", "начала воронку", "прошел воронку", "прошла воронку",
-        "зов древних", "марафон", "прямой эфир", "финальное посвящение",
-        "это не теория", "это не продажа", "практика", "история одной ученицы",
-        "рейки бон.", "белый маг", "врата знаний", "каждый путь начинается",
-        "послание восьмое", "что дальше", "запись финального дня",
-        "отправили доступ", "доступ к новому тесту",
-    )
-    if len(normalized) > 80 and any(marker in normalized for marker in funnel_markers):
-        return True
+    # Явный запрос клиента — отвечаем
     if looks_like_explicit_client_request(message):
         return False
-    return len(normalized) > 220
+    # Всё остальное — игнорируем
+    return True
 
 def salebot_event_id(payload):
     return salebot_value(payload, "internal_id", "message_id", "id")
