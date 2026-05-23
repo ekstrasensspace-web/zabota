@@ -4,9 +4,9 @@ from pathlib import Path
 # --- Telegram ---
 TELEGRAM_TOKEN: str = os.getenv("TELEGRAM_TOKEN", "")
 
-# --- Anthropic ---
-ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5")
+# --- Google Gemini ---
+GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "1024"))
 
 # --- Knowledge base ---
