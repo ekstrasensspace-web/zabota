@@ -54,6 +54,18 @@ _QUESTION_WORDS = {
     "how", "what", "when", "where", "why", "who", "which",
 }
 
+# Слова-маркеры что ученик делится опытом практики
+_EXPERIENCE_WORDS = {
+    "почувствовал", "почувствовала", "ощутил", "ощутила", "увидел", "увидела",
+    "приснилось", "приснился", "медитировал", "медитировала", "практиковал", "практиковала",
+    "делал", "делала", "попробовал", "попробовала", "получилось", "не получилось",
+    "ощущение", "ощущения", "практика", "медитация", "сделал", "сделала",
+    "во время", "после практики", "после медитации", "в практике",
+    "энергия", "поток", "вихрь", "тепло", "холод", "покалывание", "расширение",
+    "слёзы", "страх", "радость", "тревога", "спокойствие", "безмятежность",
+    "образ", "видение", "свет", "цвет", "пространство", "тишина",
+}
+
 
 def _is_question(text: str) -> bool:
     if TRIGGER_QUESTION_MARK and "?" in text:
@@ -63,6 +75,12 @@ def _is_question(text: str) -> bool:
         if first in _QUESTION_WORDS:
             return True
     return False
+
+
+def _is_experience_share(text: str) -> bool:
+    """Ученик делится опытом практики — куратор должен откликнуться."""
+    lower = text.lower()
+    return any(word in lower for word in _EXPERIENCE_WORDS)
 
 
 # ---------------------------------------------------------------------------
@@ -147,8 +165,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     elif is_private:
         # В личном чате — отвечаем на всё
         await _answer(update, text)
-    elif _is_question(text):
-        # В группе — только на вопросы
+    elif _is_question(text) or _is_experience_share(text):
+        # В группе — на вопросы И на поделённый опыт практики
         await _answer(update, text)
 
 
