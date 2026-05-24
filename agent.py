@@ -576,12 +576,17 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 Предложи анкету так: «Чтобы я могла подобрать для вас самый точный вариант — заполните короткую анкету, специалист свяжется и поможет выбрать путь: [ссылка]»
 
 ССЫЛКИ НА АНКЕТЫ (выбирай по теме разговора):
-- Если говорили про Магию Друидов → https://superabilityacademy.com/anketa_sps_6
-- Если говорили про 7 Лучей → https://superabilityacademy.com/anketa_sps_5
-- Если говорили про Магию Рун → https://superabilityacademy.com/anketa_sps_4
-- Если говорили про Ченнелинг → https://superabilityacademy.com/anketa_sps_3
-- Если говорили про Тибетский Рейки Бон → https://superabilityacademy.com/anketa_sps_2
-- Если тема не определена или клиент не знает что выбрать → https://superabilityacademy.com/anketa_sps_1 («Анкета Выбор пути»)
+- 7 Лучей → https://superabilityacademy.com/seven_rays_anketa
+- Магия Друидов → https://superabilityacademy.com/Druid's_trial
+- Магия Рун → https://superabilityacademy.com/runy_anketa («Диагностическая карта экстрасенсорного потенциала»)
+- Ченнелинг (тёплый трафик, уже знаком с Натальей) → https://superabilityacademy.com/channeling_anketa
+- Ченнелинг (холодный трафик, впервые) → https://superabilityacademy.com/channeling_anketa_c
+- Тибетский Рейки Бон → https://superabilityacademy.com/anketa_reiki_bon
+- Египет (курс Врата Маат) → https://superabilityacademy.com/anketa_egypt_vrata_maat
+- Марафон «Из тени в свет» → https://superabilityacademy.com/anketa_iz_teni_v_svet
+- Клуб (новые участники) → https://superabilityacademy.com/club_anketa
+- Клуб «Хранители знаний» → https://superabilityacademy.com/keepers_of_knowledge
+- Если тема не определена или клиент не знает что выбрать → https://superabilityacademy.com/CHOICE_OF_PATH («Анкета Выбор пути»)
 
 РАСШИФРОВКА СИМВОЛОВ (очень важный сценарий!):
 Когда клиент пишет набор символов — цветов, цифр, животных, знаков (например "Фиолетовый, 7, бесконечность, волк") — это значит он увидел символы в видео Натальи и хочет расшифровку.
