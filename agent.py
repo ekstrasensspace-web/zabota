@@ -758,7 +758,8 @@ def save_user(user_id):
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
 
 def call_gemini(system_prompt, user_message, max_tokens=1024):
-    """Вызов Gemini 2.0 Flash через HTTP — бесплатно, 1500 запросов/день."""
+    """Вызов Gemini 2.0 Flash через HTTP — бесплатно, 1500 запросов/день.
+    При 429 (rate limit) делаем до 3 попыток с паузами 20/40 сек."""
     if not GEMINI_API_KEY:
         print("Gemini: GEMINI_API_KEY не задан — пропускаем", flush=True)
         return None
@@ -771,14 +772,29 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
         "contents": [{"parts": [{"text": full_prompt}]}],
         "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7},
     }
-    try:
-        resp = requests.post(url, json=body, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception as exc:
-        print(f"Gemini API error: {exc}", flush=True)
-        return None
+    retry_delays = [20, 40]  # секунды паузы перед повтором при 429
+    for attempt in range(3):
+        try:
+            resp = requests.post(url, json=body, timeout=30)
+            if resp.status_code == 429:
+                if attempt < len(retry_delays):
+                    delay = retry_delays[attempt]
+                    print(f"Gemini 429 rate limit (attempt {attempt+1}/3), ждём {delay}с...", flush=True)
+                    time.sleep(delay)
+                    continue
+                else:
+                    print(f"Gemini 429 rate limit — исчерпаны попытки", flush=True)
+                    return None
+            resp.raise_for_status()
+            data = resp.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except requests.exceptions.HTTPError as exc:
+            print(f"Gemini API HTTP error: {exc}", flush=True)
+            return None
+        except Exception as exc:
+            print(f"Gemini API error: {exc}", flush=True)
+            return None
+    return None
 
 def call_ai(system_prompt, user_message, max_tokens=1024):
     """Gemini (бесплатно) → Claude (платный запасной)."""
