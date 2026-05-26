@@ -775,7 +775,7 @@ def call_groq(system_prompt, user_message, max_tokens=1024):
     # Groq имеет лимит на размер запроса — обрезаем системный промпт до 12000 символов
     groq_system = system_prompt[:12000] if len(system_prompt) > 12000 else system_prompt
     body = {
-        "model": "llama-3.1-8b-instant",
+        "model": "llama-3.3-70b-versatile",
         "messages": [
             {"role": "system", "content": groq_system},
             {"role": "user", "content": user_message},
@@ -1925,7 +1925,7 @@ def test_ai_endpoint():
             "contents": [{"parts": [{"text": "Ответь одним словом: работает"}]}],
             "generationConfig": {"maxOutputTokens": 50, "temperature": 0.0},
         }
-        for model, api_ver in [("gemini-2.5-flash-preview-05-20","v1beta"),("gemini-2.5-flash","v1beta"),("gemini-2.0-flash","v1beta"),("gemini-2.0-flash-lite","v1beta"),("gemini-2.0-flash-001","v1beta")]:
+        for model, api_ver in [("gemini-2.5-flash-preview-05-20","v1beta"),("gemini-2.5-flash","v1beta"),("gemini-2.0-flash","v1beta"),("gemini-2.0-flash-lite","v1beta")]:
             try:
                 url = (
                     f"https://generativelanguage.googleapis.com/{api_ver}/models/"
