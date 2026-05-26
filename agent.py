@@ -864,6 +864,48 @@ def call_ai(system_prompt, user_message, max_tokens=1024):
             print(f"Claude API error (fallback): {exc}", flush=True)
     return None
 conversation_history = {}
+
+# === Фоллоу-ап: повторный вопрос через 10 минут если клиент не ответил ===
+salebot_followup_timers = {}  # client_id -> threading.Timer
+
+def cancel_salebot_followup(client_id):
+    """Отменить запланированный фоллоу-ап (клиент ответил)."""
+    timer = salebot_followup_timers.pop(client_id, None)
+    if timer:
+        timer.cancel()
+        print(f"SaleBot followup cancelled for {client_id}", flush=True)
+
+def schedule_salebot_followup(client_id, user_name, last_question):
+    """Запланировать повторный вопрос через 10 минут в другой формулировке."""
+    cancel_salebot_followup(client_id)
+
+    def send_followup():
+        salebot_followup_timers.pop(client_id, None)
+        print(f"SaleBot followup: генерируем переформулировку для {client_id}", flush=True)
+        rephrase_prompt = (
+            "Ты — консультант академии. Клиент не ответил на вопрос. "
+            "Переформулируй вопрос коротко и по-другому, тепло и без давления. "
+            "Только сам вопрос, без лишних слов."
+        )
+        followup = call_ai(rephrase_prompt, f"Исходный вопрос: {last_question}")
+        if not followup:
+            followup = last_question  # если AI не ответил — повторяем оригинал
+        try:
+            send_salebot_message(client_id, followup)
+            log_dialog("SaleBot", client_id, user_name, "[followup]", followup)
+            telegram_notify_sync(
+                f"⏰ Фоллоу-ап — {user_name} ({client_id})\n"
+                f"🤖 Бот повторил вопрос:\n{followup[:300]}"
+            )
+            print(f"SaleBot followup sent to {client_id}", flush=True)
+        except Exception as e:
+            print(f"SaleBot followup send error: {e}", flush=True)
+
+    timer = threading.Timer(600, send_followup)  # 10 минут
+    timer.daemon = True
+    salebot_followup_timers[client_id] = timer
+    timer.start()
+    print(f"SaleBot followup scheduled for {client_id} in 10 min", flush=True)
 paused_users = set()        # пользователи на ручном управлении
 forwarded_map = {}          # message_id пересланного сообщения → user_id клиента
 known_users = load_known_users()
@@ -1588,6 +1630,10 @@ def process_salebot_message(payload, _debug_entry=None):
 
     print(f"SaleBot process: client_id={client_id!r} msg={user_message[:80]!r} name={user_name!r} channel={salebot_channel_info(payload)}", flush=True)
 
+    # Клиент написал — отменяем запланированный фоллоу-ап
+    if client_id:
+        cancel_salebot_followup(client_id)
+
     if not client_id or not user_message:
         print(f"SaleBot SKIP[no_id_or_msg]: Payload={payload}", flush=True)
         _set_result("⛔ нет ID или текста")
@@ -1663,6 +1709,10 @@ def process_salebot_message(payload, _debug_entry=None):
         return
     log_dialog("SaleBot", client_id, user_name, user_message, reply)
     _set_result(f"✅ ответ отправлен: {reply[:80]}")
+
+    # Если бот задал вопрос — через 10 минут напомнить если клиент не ответит
+    if "?" in reply:
+        schedule_salebot_followup(client_id, user_name, reply)
 
     reason = human_attention_reason(user_message, reply)
     if reason:
