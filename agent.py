@@ -1620,7 +1620,10 @@ def process_salebot_message(payload, _debug_entry=None):
         print(f"SaleBot SKIP[noise]: client={client_id} msg={user_message[:80]!r}", flush=True)
         _set_result("⛔ шум")
         return
-    if is_passive_funnel_message(user_message):
+    # Пассивный фильтр НЕ применяем если с клиентом уже идёт диалог
+    user_key_check = f"salebot:{client_id}"
+    has_history = bool(conversation_history.get(user_key_check))
+    if not has_history and is_passive_funnel_message(user_message):
         print(f"SaleBot SKIP[passive]: client={client_id} msg={user_message[:80]!r}", flush=True)
         _set_result("⛔ пассивный (не вопрос)")
         return
