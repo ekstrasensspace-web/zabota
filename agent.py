@@ -741,6 +741,55 @@ with open(os.path.join(BASE_DIR, "products.txt"), "r", encoding="utf-8") as f:
     products = f.read()
 print(f"products.txt загружен, {len(products)} символов")
 
+# === База знаний: карточки курсов (загружаются по ключевым словам) ===
+_KB_SECTIONS = {}
+_KB_FILE = os.path.join(BASE_DIR, "knowledge_base.txt")
+if os.path.exists(_KB_FILE):
+    _current_section = None
+    _current_lines = []
+    with open(_KB_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("=== КАРТОЧКА:"):
+                if _current_section:
+                    _KB_SECTIONS[_current_section] = "".join(_current_lines).strip()
+                _current_section = line.strip().replace("=== КАРТОЧКА:", "").replace("===", "").strip()
+                _current_lines = []
+            else:
+                _current_lines.append(line)
+        if _current_section:
+            _KB_SECTIONS[_current_section] = "".join(_current_lines).strip()
+    print(f"База знаний загружена: {list(_KB_SECTIONS.keys())}")
+
+_KB_KEYWORDS = {
+    "Ченнелинг":    ["ченнелинг", "ченнел", "channeling"],
+    "Рейки":        ["рейки", "рэйки", "reiki", "рейк"],
+    "Руны":         ["руны", "руна", "рун"],
+    "7 лучей":      ["луч", "лучи", "7 луч"],
+    "Друиды":       ["друид"],
+    "Египет":       ["египет", "египетск", "магия египта"],
+    "Предсказания": ["предсказани", "прорицани", "таро", "оракул", "гадани", "предсказыва"],
+    "Медитации":    ["медитаци", "медитация", "марафон"],
+    "Клуб":         ["клуб", "хранители"],
+}
+
+def find_relevant_kb(query, max_chars=8000):
+    """Возвращает только нужные разделы базы знаний по ключевым словам запроса."""
+    if not _KB_SECTIONS:
+        return ""
+    q = query.lower()
+    matched = [name for name, kws in _KB_KEYWORDS.items() if any(kw in q for kw in kws)]
+    if not matched:
+        return ""
+    result = ""
+    for name in matched:
+        content = _KB_SECTIONS.get(name, "")
+        if content:
+            chunk = f"\n=== {name} ===\n{content[:4000]}\n"
+            if len(result) + len(chunk) > max_chars:
+                break
+            result += chunk
+    return result
+
 # RAG отключён для экономии памяти на Railway
 # Бот работает только на системном промпте (цены, скрипты, расписание)
 model = None
@@ -1169,13 +1218,18 @@ def generate_ai_reply(conversation_key, user_message):
     if len(conversation_history[conversation_key]) > 20:
         conversation_history[conversation_key] = conversation_history[conversation_key][-20:]
 
-    # Собираем историю в один текст для Gemini
+    # Собираем историю в один текст
     history_text = ""
     for msg in conversation_history[conversation_key][:-1]:
         role = "Клиент" if msg["role"] == "user" else "Консультант"
         history_text += f"{role}: {msg['content']}\n"
 
+    # Добавляем релевантные разделы базы знаний
+    kb_section = find_relevant_kb(user_message)
     system = build_system_prompt(similar)
+    if kb_section:
+        system += f"\n\n=== ПОДРОБНАЯ ИНФОРМАЦИЯ О КУРСАХ ===\n{kb_section}"
+
     full_user = (history_text + f"Клиент: {user_message}").strip()
 
     reply = call_ai(system, full_user, max_tokens=1024)
