@@ -1413,33 +1413,15 @@ def recursive_find(data, *keys):
 def is_salebot_form_submission(payload):
     """Анкета/заявка GetCourse — не вопрос клиента, не отвечаем.
 
-    Признаки: поля сделки/заказа GetCourse (market_id, getcourse_deal_id,
-    getcourse_payment_link, link_anketa, result=True/1) или webhook о
-    прохождении шага воронки (event_type содержит 'deal'/'order'/'payment').
+    ВАЖНО: проверяем только ТЕКУЩЕЕ событие (верхний уровень payload),
+    НЕ сохранённые переменные клиента. У клиента может быть link_anketa /
+    proxy_id в профиле от прошлых покупок — это не значит что его текущее
+    сообщение "Как купить курс" является анкетой.
     """
     if not isinstance(payload, dict):
         return False
 
-    # Проверяем поля верхнего уровня и вложенный client
-    client_data = payload.get("client") if isinstance(payload.get("client"), dict) else {}
-    order_vars = client_data.get("order_variables") if isinstance(client_data.get("order_variables"), dict) else {}
-
-    # Поля, характерные для сделки/заказа GetCourse
-    deal_keys = (
-        "market_id", "market_price", "market_title",
-        "getcourse_deal_id", "getcourse_payment_link",
-        "link_anketa", "link_anketa2",
-        "link_avtoweb_povtorruny_1", "link_avtowebruny_1",
-        "proxy_id", "proxy_ml",
-    )
-    for source in (payload, client_data, order_vars):
-        if not isinstance(source, dict):
-            continue
-        for key in deal_keys:
-            if key in source:
-                return True
-
-    # result=True/1 в верхнем уровне — итог отправки формы
+    # result=True/1 на верхнем уровне — итог отправки формы
     result_val = payload.get("result")
     if result_val in (True, 1, "True", "true", "1"):
         return True
