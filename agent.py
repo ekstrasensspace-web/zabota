@@ -768,13 +768,13 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
         "contents": [{"parts": [{"text": full_prompt}]}],
         "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7},
     }
-    # (модель, api_version) — 1.5 модели на v1, 2.0 на v1beta
+    # Пробуем все актуальные модели Gemini по очереди
     models = [
-        ("gemini-2.0-flash",       "v1beta"),
-        ("gemini-2.0-flash-lite",  "v1beta"),
-        ("gemini-1.5-flash",       "v1"),
-        ("gemini-1.5-flash-8b",    "v1"),
-        ("gemini-1.5-flash-001",   "v1"),
+        ("gemini-2.5-flash-preview-05-20", "v1beta"),
+        ("gemini-2.5-flash",               "v1beta"),
+        ("gemini-2.0-flash",               "v1beta"),
+        ("gemini-2.0-flash-lite",          "v1beta"),
+        ("gemini-2.0-flash-001",           "v1beta"),
     ]
     for model, api_ver in models:
         url = (
@@ -1798,7 +1798,7 @@ def test_ai_endpoint():
             "contents": [{"parts": [{"text": "Ответь одним словом: работает"}]}],
             "generationConfig": {"maxOutputTokens": 50, "temperature": 0.0},
         }
-        for model, api_ver in [("gemini-2.0-flash","v1beta"),("gemini-2.0-flash-lite","v1beta"),("gemini-1.5-flash","v1"),("gemini-1.5-flash-8b","v1")]:
+        for model, api_ver in [("gemini-2.5-flash-preview-05-20","v1beta"),("gemini-2.5-flash","v1beta"),("gemini-2.0-flash","v1beta"),("gemini-2.0-flash-lite","v1beta"),("gemini-2.0-flash-001","v1beta")]:
             try:
                 url = (
                     f"https://generativelanguage.googleapis.com/{api_ver}/models/"
