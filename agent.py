@@ -758,8 +758,9 @@ def save_user(user_id):
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
 
 def call_gemini(system_prompt, user_message, max_tokens=1024):
-    """Вызов Gemini 1.5 Flash через HTTP — бесплатно, 1500 запросов/день."""
+    """Вызов Gemini 2.0 Flash через HTTP — бесплатно, 1500 запросов/день."""
     if not GEMINI_API_KEY:
+        print("Gemini: GEMINI_API_KEY не задан — пропускаем", flush=True)
         return None
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -1355,7 +1356,10 @@ def looks_like_explicit_client_request(message):
     request_markers = (
         "помог", "помощ", "подскаж", "скажите", "хочу", "нужно", "нужна",
         "можно", "как ", "когда ", "куда ", "где ", "сколько ", "почему ",
-        "что делать", "не могу", "не получается", "не работает", "ошибка",
+        "что делать", "что такое", "что это", "что за ", "что значит",
+        "что включает", "что даёт", "что дает", "чем отличается",
+        "про рейки", "про руны", "про курс", "про обучение", "про магию",
+        "не могу", "не получается", "не работает", "ошибка",
         "нет доступа", "не вижу", "не приш", "нет письма", "письма нет",
         "в спаме нет", "нет в спаме", "оплат", "деньги", "зачислены",
         "дорого", "подумаю", "не готов", "не готова", "боюсь", "страх",
@@ -2289,6 +2293,7 @@ asyncio.run_coroutine_threadsafe(_init_ptb(), _ptb_loop).result(timeout=30)
 threading.Thread(target=run_web_server, daemon=True).start()
 threading.Thread(target=run_telethon_watcher, daemon=True).start()
 print("Бот запущен (webhook mode)!", flush=True)
+print(f"GEMINI_API_KEY: {'✅ задан (' + GEMINI_API_KEY[:8] + '...)' if GEMINI_API_KEY else '❌ НЕ ЗАДАН — бот будет молчать!'}", flush=True)
 
 # Держим главный поток живым (все рабочие потоки — daemon)
 threading.Event().wait()
