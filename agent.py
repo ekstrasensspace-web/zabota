@@ -1,6 +1,6 @@
 import anthropic
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, abort
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
@@ -2197,7 +2197,62 @@ app.add_handler(CommandHandler("decode", handle_decode_command))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_message))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=-1001752036351), handle_public_symbol_decode))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_public_symbol_decode))
+
+# ─── Telegram через webhook вместо polling ────────────────────────────────────
+# Polling вызывает Conflict-ошибку при деплое (два контейнера одновременно).
+# Webhook: Telegram сам шлёт обновления → никаких конфликтов никогда.
+
+RAILWAY_PUBLIC_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+TELEGRAM_WEBHOOK_PATH = "/telegram/webhook"
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "tg_secret_2024")
+
+# Выделенный event loop для python-telegram-bot
+_ptb_loop = asyncio.new_event_loop()
+
+def _run_ptb_loop():
+    asyncio.set_event_loop(_ptb_loop)
+    _ptb_loop.run_forever()
+
+@web_app.route(TELEGRAM_WEBHOOK_PATH, methods=["POST"])
+def telegram_webhook_route():
+    secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if secret != TELEGRAM_WEBHOOK_SECRET:
+        print(f"Telegram webhook: bad secret token", flush=True)
+        abort(403)
+    data = request.get_json(force=True, silent=True)
+    if not data:
+        return "ok", 200
+    update = Update.de_json(data, app.bot)
+    future = asyncio.run_coroutine_threadsafe(app.process_update(update), _ptb_loop)
+    try:
+        future.result(timeout=25)
+    except Exception as e:
+        print(f"Telegram webhook process error: {e}", flush=True)
+    return "ok", 200
+
+async def _init_ptb():
+    await app.initialize()
+    await app.start()
+    if RAILWAY_PUBLIC_DOMAIN:
+        webhook_url = f"https://{RAILWAY_PUBLIC_DOMAIN}{TELEGRAM_WEBHOOK_PATH}"
+        await app.bot.set_webhook(
+            url=webhook_url,
+            secret_token=TELEGRAM_WEBHOOK_SECRET,
+            drop_pending_updates=True,
+            allowed_updates=list(Update.ALL_TYPES),
+        )
+        print(f"Telegram webhook зарегистрирован: {webhook_url}", flush=True)
+    else:
+        print("RAILWAY_PUBLIC_DOMAIN не задан — Telegram webhook не зарегистрирован", flush=True)
+
+# Запускаем PTB loop в фоне
+threading.Thread(target=_run_ptb_loop, daemon=True).start()
+# Инициализируем PTB и регистрируем webhook (блокирует до завершения)
+asyncio.run_coroutine_threadsafe(_init_ptb(), _ptb_loop).result(timeout=30)
+
 threading.Thread(target=run_web_server, daemon=True).start()
 threading.Thread(target=run_telethon_watcher, daemon=True).start()
-print("Бот запущен!")
-app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+print("Бот запущен (webhook mode)!", flush=True)
+
+# Держим главный поток живым (все рабочие потоки — daemon)
+threading.Event().wait()
