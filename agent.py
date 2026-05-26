@@ -809,6 +809,41 @@ processed_public_messages = set()
 processed_public_lock = threading.Lock()
 print(f"Известных пользователей: {len(known_users)}")
 
+# === Лог диалогов для админки ===
+import sqlite3
+
+DIALOG_DB = os.path.join(BASE_DIR, "dialogs.db")
+
+def init_dialog_db():
+    conn = sqlite3.connect(DIALOG_DB)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS dialogs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT DEFAULT (datetime('now','localtime')),
+            source TEXT,
+            client_id TEXT,
+            client_name TEXT,
+            user_message TEXT,
+            bot_reply TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def log_dialog(source, client_id, client_name, user_message, bot_reply):
+    try:
+        conn = sqlite3.connect(DIALOG_DB)
+        conn.execute(
+            "INSERT INTO dialogs (source, client_id, client_name, user_message, bot_reply) VALUES (?,?,?,?,?)",
+            (source, str(client_id), str(client_name), str(user_message), str(bot_reply))
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"dialog_log error: {e}", flush=True)
+
+init_dialog_db()
+
 web_app = Flask(__name__)
 
 def mark_public_message_processed(chat_id, message_id):
@@ -1513,6 +1548,7 @@ def process_salebot_message(payload):
         print(f"SaleBot no reply (AI silent) for client {client_id}: {user_message[:120]}", flush=True)
         return
     send_salebot_message(client_id, reply)
+    log_dialog("SaleBot", client_id, user_name, user_message, reply)
 
     reason = human_attention_reason(user_message, reply)
     if reason:
@@ -1662,6 +1698,127 @@ def salebot_webhook():
     print(f"SaleBot webhook received: {payload}", flush=True)
     threading.Thread(target=process_salebot_message, args=(payload,), daemon=True).start()
     return jsonify({"ok": True})
+
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "mac2024")
+
+@web_app.route("/admin")
+def admin_panel():
+    pwd = request.args.get("pwd", "")
+    if pwd != ADMIN_PASSWORD:
+        return "<h2>403 Forbidden</h2><p>Добавьте ?pwd=ваш_пароль к URL</p>", 403
+
+    source_filter = request.args.get("source", "")
+    search = request.args.get("q", "").strip()
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = 50
+
+    conn = sqlite3.connect(DIALOG_DB)
+    where_clauses = []
+    params = []
+    if source_filter:
+        where_clauses.append("source = ?")
+        params.append(source_filter)
+    if search:
+        where_clauses.append("(client_name LIKE ? OR user_message LIKE ? OR bot_reply LIKE ?)")
+        params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    total = conn.execute(f"SELECT COUNT(*) FROM dialogs {where_sql}", params).fetchone()[0]
+    rows = conn.execute(
+        f"SELECT id, ts, source, client_id, client_name, user_message, bot_reply FROM dialogs {where_sql} ORDER BY id DESC LIMIT ? OFFSET ?",
+        params + [per_page, (page - 1) * per_page]
+    ).fetchall()
+    sources = [r[0] for r in conn.execute("SELECT DISTINCT source FROM dialogs ORDER BY source").fetchall()]
+    conn.close()
+
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    def esc(s):
+        return str(s).replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"','&quot;')
+
+    def page_url(p):
+        args = f"?pwd={pwd}&page={p}"
+        if source_filter: args += f"&source={source_filter}"
+        if search: args += f"&q={search}"
+        return args
+
+    rows_html = ""
+    for row in rows:
+        rid, ts, src, cid, cname, umsg, breply = row
+        rows_html += f"""
+        <tr>
+          <td class="ts">{esc(ts)}</td>
+          <td><span class="badge">{esc(src)}</span></td>
+          <td class="name">{esc(cname)}<br><small>{esc(cid)}</small></td>
+          <td class="msg">{esc(umsg)}</td>
+          <td class="reply">{esc(breply)}</td>
+        </tr>"""
+
+    source_opts = "".join(
+        f'<option value="{esc(s)}" {"selected" if s == source_filter else ""}>{esc(s)}</option>'
+        for s in sources
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Диалоги бота</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, sans-serif; background: #f5f5f7; color: #1d1d1f; font-size: 14px; }}
+  header {{ background: #1d1d1f; color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }}
+  header h1 {{ font-size: 18px; font-weight: 600; }}
+  header .count {{ font-size: 13px; opacity: .6; }}
+  .toolbar {{ background: #fff; padding: 12px 24px; display: flex; gap: 10px; flex-wrap: wrap; border-bottom: 1px solid #e5e5e7; }}
+  .toolbar input, .toolbar select {{ padding: 7px 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 14px; }}
+  .toolbar input {{ flex: 1; min-width: 200px; }}
+  .toolbar button {{ padding: 7px 16px; background: #0071e3; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }}
+  table {{ width: 100%; border-collapse: collapse; background: #fff; margin: 16px 0; }}
+  th {{ background: #f5f5f7; padding: 10px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e5e5e7; white-space: nowrap; }}
+  td {{ padding: 10px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }}
+  td.ts {{ white-space: nowrap; color: #6e6e73; font-size: 12px; }}
+  td.name {{ min-width: 120px; font-weight: 500; }}
+  td.name small {{ color: #6e6e73; font-weight: 400; }}
+  td.msg {{ max-width: 320px; word-break: break-word; }}
+  td.reply {{ max-width: 380px; word-break: break-word; color: #0071e3; }}
+  .badge {{ background: #e8f4fd; color: #0071e3; padding: 2px 8px; border-radius: 10px; font-size: 12px; }}
+  .pagination {{ display: flex; gap: 8px; justify-content: center; padding: 16px; }}
+  .pagination a {{ padding: 6px 14px; border: 1px solid #d2d2d7; border-radius: 8px; text-decoration: none; color: #0071e3; }}
+  .pagination a.active {{ background: #0071e3; color: #fff; border-color: #0071e3; }}
+  .wrap {{ padding: 0 24px; }}
+</style>
+</head>
+<body>
+<header>
+  <h1>💬 Диалоги бота</h1>
+  <span class="count">Всего: {total} | Страница {page}/{total_pages}</span>
+</header>
+<div class="toolbar">
+  <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;width:100%">
+    <input type="hidden" name="pwd" value="{esc(pwd)}">
+    <input name="q" value="{esc(search)}" placeholder="Поиск по имени или тексту...">
+    <select name="source">
+      <option value="">Все источники</option>
+      {source_opts}
+    </select>
+    <button type="submit">Найти</button>
+    <a href="?pwd={esc(pwd)}" style="padding:7px 14px;border:1px solid #d2d2d7;border-radius:8px;text-decoration:none;color:#1d1d1f">Сбросить</a>
+  </form>
+</div>
+<div class="wrap">
+<table>
+  <thead><tr><th>Время</th><th>Источник</th><th>Клиент</th><th>Сообщение клиента</th><th>Ответ бота</th></tr></thead>
+  <tbody>{rows_html if rows_html else '<tr><td colspan="5" style="text-align:center;padding:40px;color:#6e6e73">Диалогов пока нет</td></tr>'}</tbody>
+</table>
+<div class="pagination">
+  {''.join(f'<a href="{page_url(p)}" class="{"active" if p == page else ""}">{p}</a>' for p in range(max(1, page-3), min(total_pages+1, page+4)))}
+</div>
+</div>
+</body>
+</html>"""
+    return html
 
 @web_app.route("/salebot/reply", methods=["GET", "POST"])
 @web_app.route("/salebot/reply/", methods=["GET", "POST"])
