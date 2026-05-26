@@ -1373,6 +1373,16 @@ def is_salebot_outgoing(payload):
 def is_salebot_noise_message(message):
     """Отсекаем автосообщения воронок, одиночные эмодзи и технический шум SaleBot."""
     normalized = re.sub(r"\s+", " ", message.lower()).strip()
+    # Системные события SaleBot — всегда игнорируем
+    system_prefixes = (
+        "link_was_pressed",
+        "client_group_join",
+        "client_group_leave",
+        "button_was_pressed",
+        "event_was_fired",
+    )
+    if any(normalized.startswith(p) for p in system_prefixes):
+        return True
     bot_waiting_phrases = (
         "жду тебя",
         "жду твоего вопроса",
