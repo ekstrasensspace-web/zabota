@@ -19,6 +19,7 @@ logging.getLogger("telegram").setLevel(logging.WARNING)
 
 CLAUDE_API_KEY = os.environ.get("CLAUDE_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 SALEBOT_API_KEY = os.environ.get("SALEBOT_API_KEY", "")
 TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID", "")
@@ -757,6 +758,35 @@ def save_user(user_id):
 
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
 
+def call_groq(system_prompt, user_message, max_tokens=1024):
+    """Groq API — бесплатно, 14400 запросов/день, очень быстро."""
+    if not GROQ_API_KEY:
+        return None
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    body = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": 0.7,
+    }
+    try:
+        resp = requests.post(url, json=body, headers=headers, timeout=30)
+        if resp.status_code == 429:
+            print("Groq 429 rate limit", flush=True)
+            return None
+        resp.raise_for_status()
+        text = resp.json()["choices"][0]["message"]["content"]
+        print("Groq ответил успешно", flush=True)
+        return text
+    except Exception as exc:
+        print(f"Groq error: {exc}", flush=True)
+        return None
+
+
 def call_gemini(system_prompt, user_message, max_tokens=1024):
     """Вызов Gemini через HTTP — бесплатно.
     Пробует несколько моделей с правильными API-версиями."""
@@ -810,7 +840,10 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
     return None
 
 def call_ai(system_prompt, user_message, max_tokens=1024):
-    """Gemini (бесплатно) → Claude (платный запасной)."""
+    """Groq (основной) → Gemini (запасной) → Claude (платный)."""
+    reply = call_groq(system_prompt, user_message, max_tokens)
+    if reply:
+        return reply
     reply = call_gemini(system_prompt, user_message, max_tokens)
     if reply:
         return reply
@@ -1788,9 +1821,29 @@ def test_ai_endpoint():
         return "<h2>403</h2>", 403
 
     results = []
+    results.append(f"<b>GROQ_API_KEY:</b> {'✅ задан (' + GROQ_API_KEY[:8] + '...)' if GROQ_API_KEY else '❌ НЕ ЗАДАН'}")
     results.append(f"<b>GEMINI_API_KEY:</b> {'✅ задан (' + GEMINI_API_KEY[:8] + '...)' if GEMINI_API_KEY else '❌ НЕ ЗАДАН'}")
     salebot_key = os.environ.get("SALEBOT_API_KEY", "")
     results.append(f"<b>SALEBOT_API_KEY:</b> {'✅ задан (' + salebot_key[:8] + '...)' if salebot_key else '❌ НЕ ЗАДАН'}")
+
+    # Тест Groq
+    if GROQ_API_KEY:
+        try:
+            resp = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                json={"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content": "Скажи: работает"}], "max_tokens": 20},
+                timeout=15
+            )
+            if resp.status_code == 200:
+                text = resp.json()["choices"][0]["message"]["content"]
+                results.append(f"<b>Groq [llama-3.1-8b]:</b> ✅ ответил: <i>{text[:200]}</i>")
+            else:
+                results.append(f"<b>Groq:</b> ❌ HTTP {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            results.append(f"<b>Groq:</b> ❌ Exception: {e}")
+    else:
+        results.append("<b>Groq:</b> ⏭️ ключ не задан — добавьте GROQ_API_KEY в Railway")
 
     # Тест Gemini — пробуем все модели по очереди
     if GEMINI_API_KEY:
