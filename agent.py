@@ -1384,7 +1384,14 @@ def is_passive_funnel_message(message):
     return True
 
 def salebot_event_id(payload):
-    return salebot_value(payload, "internal_id", "message_id", "id")
+    """Возвращает уникальный ID события. Строка 'None' (которую SaleBot шлёт
+    когда реального ID нет) игнорируется — иначе все VK сообщения блокируются
+    как дубликаты после первого обработанного."""
+    for key in ("internal_id", "message_id", "id"):
+        val = payload.get(key)
+        if val is not None and val != "" and str(val).strip().lower() != "none":
+            return val
+    return None
 
 def salebot_channel_info(payload):
     client_data = payload.get("client") if isinstance(payload.get("client"), dict) else {}
