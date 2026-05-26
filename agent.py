@@ -1504,19 +1504,25 @@ def send_salebot_message(client_id, message):
         raise RuntimeError(f"SaleBot API error {response.status_code}: {response.text[:500]}")
     return response.text
 
-def process_salebot_message(payload):
+def process_salebot_message(payload, _debug_entry=None):
+    def _set_result(r):
+        if _debug_entry is not None:
+            _debug_entry["result"] = r
+
     client_id, user_message, user_name = extract_salebot_payload(payload)
 
     print(f"SaleBot process: client_id={client_id!r} msg={user_message[:80]!r} name={user_name!r} channel={salebot_channel_info(payload)}", flush=True)
 
     if not client_id or not user_message:
         print(f"SaleBot SKIP[no_id_or_msg]: Payload={payload}", flush=True)
+        _set_result("⛔ нет ID или текста")
         return
     event_id = salebot_event_id(payload)
     if event_id:
         event_key = str(event_id)
         if event_key in processed_salebot_events:
             print(f"SaleBot SKIP[duplicate]: event_id={event_key}", flush=True)
+            _set_result("⛔ дубликат")
             return
         processed_salebot_events.add(event_key)
         if len(processed_salebot_events) > 1000:
@@ -1525,41 +1531,53 @@ def process_salebot_message(payload):
         is_input_val = salebot_value(payload, "is_input")
         direction_val = salebot_value(payload, "direction", "message_direction", "sender_type", "author_type")
         print(f"SaleBot SKIP[outgoing]: client={client_id} is_input={is_input_val!r} direction={direction_val!r}", flush=True)
+        _set_result("⛔ исходящее (от бота/оператора)")
         return
     if is_salebot_form_submission(payload):
         print(f"SaleBot SKIP[form/anketa]: client={client_id} msg={user_message[:80]!r}", flush=True)
+        _set_result("⛔ форма/сделка")
         return
     if is_salebot_comment_payload(payload, user_message):
         print(f"SaleBot SKIP[comment]: client={client_id} msg={user_message[:80]!r}", flush=True)
+        _set_result("⛔ комментарий")
         return
     if is_salebot_noise_message(user_message):
         print(f"SaleBot SKIP[noise]: client={client_id} msg={user_message[:80]!r}", flush=True)
+        _set_result("⛔ шум")
         return
     if is_passive_funnel_message(user_message):
         print(f"SaleBot SKIP[passive]: client={client_id} msg={user_message[:80]!r}", flush=True)
+        _set_result("⛔ пассивный (не вопрос)")
         return
     now = time.time()
     last_answer_at = salebot_last_answer.get(client_id, 0)
     if now - last_answer_at < 12:
         print(f"SaleBot SKIP[rate_limit]: client={client_id} msg={user_message[:80]!r}", flush=True)
+        _set_result("⛔ rate_limit (< 12 сек)")
         return
     salebot_last_answer[client_id] = now
     if user_message.startswith("message:"):
         print(f"SaleBot SKIP[system_msg]: client={client_id} msg={user_message[:80]!r}", flush=True)
+        _set_result("⛔ системное сообщение")
         return
 
     print(f"SaleBot PASS all filters: client={client_id} msg={user_message[:80]!r}", flush=True)
+    _set_result("🤖 вызван ИИ...")
     user_key = f"salebot:{client_id}"
     reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
     if not reply:
         print(f"SaleBot SKIP[ai_silent]: client={client_id} msg={user_message[:80]!r}", flush=True)
+        _set_result("❌ ИИ молчит (нет ответа)")
         return
+    _set_result(f"📤 отправляем ответ...")
     try:
         send_salebot_message(client_id, reply)
     except Exception as send_err:
         print(f"SaleBot SEND ERROR: client={client_id} err={send_err}", flush=True)
+        _set_result(f"❌ ОШИБКА отправки: {send_err}")
         return
     log_dialog("SaleBot", client_id, user_name, user_message, reply)
+    _set_result(f"✅ ответ отправлен: {reply[:80]}")
 
     reason = human_attention_reason(user_message, reply)
     if reason:
@@ -1709,13 +1727,61 @@ def salebot_webhook():
         payload = request.form.to_dict() or request.args.to_dict()
 
     import datetime
-    _salebot_recent.append({"ts": datetime.datetime.now().strftime("%H:%M:%S"), "payload": payload})
+    entry = {"ts": datetime.datetime.now().strftime("%H:%M:%S"), "payload": payload, "result": "⏳ обрабатывается"}
+    _salebot_recent.append(entry)
     if len(_salebot_recent) > 20:
         _salebot_recent.pop(0)
 
     print(f"SaleBot webhook received: {payload}", flush=True)
-    threading.Thread(target=process_salebot_message, args=(payload,), daemon=True).start()
+
+    def run_and_track(p, e):
+        try:
+            process_salebot_message(p, e)
+        except Exception as ex:
+            e["result"] = f"❌ exception: {ex}"
+            print(f"SaleBot process exception: {ex}", flush=True)
+
+    threading.Thread(target=run_and_track, args=(payload, entry), daemon=True).start()
     return jsonify({"ok": True})
+
+@web_app.route("/test-ai")
+def test_ai_endpoint():
+    """Диагностика: проверяем Gemini и SaleBot API прямо из браузера."""
+    pwd = request.args.get("pwd", "")
+    if pwd != os.environ.get("ADMIN_PASSWORD", "mac2024"):
+        return "<h2>403</h2>", 403
+
+    results = []
+    results.append(f"<b>GEMINI_API_KEY:</b> {'✅ задан (' + GEMINI_API_KEY[:8] + '...)' if GEMINI_API_KEY else '❌ НЕ ЗАДАН'}")
+    salebot_key = os.environ.get("SALEBOT_API_KEY", "")
+    results.append(f"<b>SALEBOT_API_KEY:</b> {'✅ задан (' + salebot_key[:8] + '...)' if salebot_key else '❌ НЕ ЗАДАН'}")
+
+    # Тест Gemini
+    if GEMINI_API_KEY:
+        try:
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+            )
+            body = {
+                "contents": [{"parts": [{"text": "Ответь одним словом: работает"}]}],
+                "generationConfig": {"maxOutputTokens": 50, "temperature": 0.0},
+            }
+            resp = requests.post(url, json=body, timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
+                text = data["candidates"][0]["content"]["parts"][0]["text"]
+                results.append(f"<b>Gemini тест:</b> ✅ ответил: <i>{text[:200]}</i>")
+            else:
+                results.append(f"<b>Gemini тест:</b> ❌ HTTP {resp.status_code}: {resp.text[:300]}")
+        except Exception as e:
+            results.append(f"<b>Gemini тест:</b> ❌ Exception: {e}")
+    else:
+        results.append("<b>Gemini тест:</b> ⏭️ пропущен (ключ не задан)")
+
+    html = "<br>".join(results)
+    return f"<html><body style='font-family:sans-serif;padding:20px'><h2>AI Диагностика</h2>{html}<br><br><a href='?pwd={pwd}'>обновить</a></body></html>"
+
 
 @web_app.route("/salebot/debug")
 def salebot_debug():
@@ -1727,15 +1793,7 @@ def salebot_debug():
     for item in reversed(_salebot_recent):
         p = item["payload"]
         client_id, msg, name = extract_salebot_payload(p)
-        outgoing = is_salebot_outgoing(p)
-        form = is_salebot_form_submission(p)
-        noise = is_salebot_noise_message(msg) if msg else True
-        passive = is_passive_funnel_message(msg) if msg else True
-        if outgoing: verdict = "⛔ outgoing"
-        elif form:   verdict = "⛔ form/anketa"
-        elif noise:  verdict = "⛔ noise"
-        elif passive: verdict = "⛔ passive (не вопрос)"
-        else:        verdict = "✅ передан ИИ"
+        verdict = item.get("result", "⏳ обрабатывается")
         raw = json.dumps(p, ensure_ascii=False)[:600]
         rows += f"""
         <tr>
