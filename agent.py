@@ -765,10 +765,12 @@ def call_groq(system_prompt, user_message, max_tokens=1024):
         return None
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    # Groq имеет лимит на размер запроса — обрезаем системный промпт до 4000 символов
+    groq_system = system_prompt[:4000] if len(system_prompt) > 4000 else system_prompt
     body = {
         "model": "llama-3.1-8b-instant",
         "messages": [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": groq_system},
             {"role": "user", "content": user_message},
         ],
         "max_tokens": max_tokens,
