@@ -769,7 +769,7 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
         "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7},
     }
     # Пробуем модели по очереди — у каждой свой лимит
-    models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
+    models = ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash"]
     for model in models:
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
