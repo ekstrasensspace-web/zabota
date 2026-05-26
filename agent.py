@@ -759,7 +759,7 @@ client = anthropic.Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
 
 def call_gemini(system_prompt, user_message, max_tokens=1024):
     """Вызов Gemini через HTTP — бесплатно.
-    При 429 пробует разные модели: gemini-2.0-flash → gemini-1.5-flash → gemini-1.5-flash-8b."""
+    Пробует несколько моделей с правильными API-версиями."""
     if not GEMINI_API_KEY:
         print("Gemini: GEMINI_API_KEY не задан — пропускаем", flush=True)
         return None
@@ -768,11 +768,17 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
         "contents": [{"parts": [{"text": full_prompt}]}],
         "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7},
     }
-    # Пробуем модели по очереди — у каждой свой лимит
-    models = ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash"]
-    for model in models:
+    # (модель, api_version) — 1.5 модели на v1, 2.0 на v1beta
+    models = [
+        ("gemini-2.0-flash",       "v1beta"),
+        ("gemini-2.0-flash-lite",  "v1beta"),
+        ("gemini-1.5-flash",       "v1"),
+        ("gemini-1.5-flash-8b",    "v1"),
+        ("gemini-1.5-flash-001",   "v1"),
+    ]
+    for model, api_ver in models:
         url = (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"https://generativelanguage.googleapis.com/{api_ver}/models/"
             f"{model}:generateContent?key={GEMINI_API_KEY}"
         )
         for attempt in range(2):
@@ -785,11 +791,14 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
                         continue
                     else:
                         print(f"Gemini {model} 429 повторно — пробуем следующую модель", flush=True)
-                        break  # переходим к следующей модели
+                        break
+                if resp.status_code == 404:
+                    print(f"Gemini {model} 404 — модель недоступна, пробуем следующую", flush=True)
+                    break
                 resp.raise_for_status()
                 data = resp.json()
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
-                print(f"Gemini {model} ответил успешно", flush=True)
+                print(f"Gemini {model} ({api_ver}) ответил успешно", flush=True)
                 return text
             except requests.exceptions.HTTPError as exc:
                 print(f"Gemini {model} HTTP error: {exc}", flush=True)
@@ -1789,10 +1798,10 @@ def test_ai_endpoint():
             "contents": [{"parts": [{"text": "Ответь одним словом: работает"}]}],
             "generationConfig": {"maxOutputTokens": 50, "temperature": 0.0},
         }
-        for model in ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash"]:
+        for model, api_ver in [("gemini-2.0-flash","v1beta"),("gemini-2.0-flash-lite","v1beta"),("gemini-1.5-flash","v1"),("gemini-1.5-flash-8b","v1")]:
             try:
                 url = (
-                    "https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"https://generativelanguage.googleapis.com/{api_ver}/models/"
                     f"{model}:generateContent?key={GEMINI_API_KEY}"
                 )
                 resp = requests.post(url, json=body, timeout=15)
@@ -1802,7 +1811,7 @@ def test_ai_endpoint():
                     results.append(f"<b>Gemini [{model}]:</b> ✅ ответил: <i>{text[:200]}</i>")
                     break
                 else:
-                    results.append(f"<b>Gemini [{model}]:</b> ❌ HTTP {resp.status_code}: {resp.text[:200]}")
+                    results.append(f"<b>Gemini [{model}/{api_ver}]:</b> ❌ HTTP {resp.status_code}: {resp.text[:200]}")
             except Exception as e:
                 results.append(f"<b>Gemini [{model}]:</b> ❌ Exception: {e}")
     else:
