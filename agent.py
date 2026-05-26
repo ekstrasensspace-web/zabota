@@ -1289,9 +1289,18 @@ def salebot_bool(value):
         return False
     return str(value).strip().lower() in {"1", "true", "yes", "out", "outgoing", "operator", "manager", "bot"}
 
+def salebot_bool_false(value):
+    """Явно False/0/no — не True-like значение."""
+    if isinstance(value, bool):
+        return not value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"0", "false", "no"}
+
 def is_salebot_outgoing(payload):
     is_input = salebot_value(payload, "is_input")
-    if is_input is not None and not salebot_bool(is_input):
+    # is_input=0/false/no → исходящее; is_input=1/true/yes → входящее; всё остальное — игнорируем
+    if is_input is not None and salebot_bool_false(is_input):
         return True
     if salebot_bool(salebot_value(payload, "is_outgoing", "outgoing", "from_me", "is_echo", "out")):
         return True
@@ -1493,11 +1502,11 @@ def send_salebot_message(client_id, message):
     if not SALEBOT_API_KEY:
         raise RuntimeError("SALEBOT_API_KEY не задан в Railway Variables")
 
-    response = requests.post(
-        f"https://chatter.salebot.pro/api/{SALEBOT_API_KEY}/message",
-        json={"client_id": client_id, "message": message},
-        timeout=20,
-    )
+    url = f"https://chatter.salebot.pro/api/{SALEBOT_API_KEY}/message"
+    body = {"client_id": client_id, "message": message}
+    print(f"SaleBot send → client_id={client_id} url={url} body_len={len(message)}", flush=True)
+    response = requests.post(url, json=body, timeout=20)
+    print(f"SaleBot send ← status={response.status_code} response={response.text[:300]}", flush=True)
     if response.status_code >= 400:
         raise RuntimeError(f"SaleBot API error {response.status_code}: {response.text[:500]}")
     return response.text
@@ -1505,49 +1514,58 @@ def send_salebot_message(client_id, message):
 def process_salebot_message(payload):
     client_id, user_message, user_name = extract_salebot_payload(payload)
 
+    print(f"SaleBot process: client_id={client_id!r} msg={user_message[:80]!r} name={user_name!r} channel={salebot_channel_info(payload)}", flush=True)
+
     if not client_id or not user_message:
-        print(f"SaleBot webhook ignored: no client_id/message. Payload={payload}", flush=True)
+        print(f"SaleBot SKIP[no_id_or_msg]: Payload={payload}", flush=True)
         return
     event_id = salebot_event_id(payload)
     if event_id:
         event_key = str(event_id)
         if event_key in processed_salebot_events:
-            print(f"SaleBot duplicate ignored: {event_key}", flush=True)
+            print(f"SaleBot SKIP[duplicate]: event_id={event_key}", flush=True)
             return
         processed_salebot_events.add(event_key)
         if len(processed_salebot_events) > 1000:
             processed_salebot_events.clear()
     if is_salebot_outgoing(payload):
-        print(f"SaleBot outgoing ignored for client {client_id} ({salebot_channel_info(payload)})", flush=True)
+        is_input_val = salebot_value(payload, "is_input")
+        direction_val = salebot_value(payload, "direction", "message_direction", "sender_type", "author_type")
+        print(f"SaleBot SKIP[outgoing]: client={client_id} is_input={is_input_val!r} direction={direction_val!r}", flush=True)
         return
     if is_salebot_form_submission(payload):
-        print(f"SaleBot form/anketa ignored for client {client_id}: {user_message[:120]}", flush=True)
+        print(f"SaleBot SKIP[form/anketa]: client={client_id} msg={user_message[:80]!r}", flush=True)
         return
     if is_salebot_comment_payload(payload, user_message):
-        print(f"SaleBot comment ignored for client {client_id} ({salebot_channel_info(payload)}): {user_message[:120]}", flush=True)
+        print(f"SaleBot SKIP[comment]: client={client_id} msg={user_message[:80]!r}", flush=True)
         return
     if is_salebot_noise_message(user_message):
-        print(f"SaleBot noise ignored for client {client_id}: {user_message[:120]}", flush=True)
+        print(f"SaleBot SKIP[noise]: client={client_id} msg={user_message[:80]!r}", flush=True)
         return
     if is_passive_funnel_message(user_message):
-        print(f"SaleBot funnel/passive ignored for client {client_id}: {user_message[:120]}", flush=True)
+        print(f"SaleBot SKIP[passive]: client={client_id} msg={user_message[:80]!r}", flush=True)
         return
     now = time.time()
     last_answer_at = salebot_last_answer.get(client_id, 0)
     if now - last_answer_at < 12:
-        print(f"SaleBot rate-limit ignored for client {client_id}: {user_message[:120]}", flush=True)
+        print(f"SaleBot SKIP[rate_limit]: client={client_id} msg={user_message[:80]!r}", flush=True)
         return
     salebot_last_answer[client_id] = now
     if user_message.startswith("message:"):
-        print(f"SaleBot system message ignored: {user_message}", flush=True)
+        print(f"SaleBot SKIP[system_msg]: client={client_id} msg={user_message[:80]!r}", flush=True)
         return
 
+    print(f"SaleBot PASS all filters: client={client_id} msg={user_message[:80]!r}", flush=True)
     user_key = f"salebot:{client_id}"
     reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
     if not reply:
-        print(f"SaleBot no reply (AI silent) for client {client_id}: {user_message[:120]}", flush=True)
+        print(f"SaleBot SKIP[ai_silent]: client={client_id} msg={user_message[:80]!r}", flush=True)
         return
-    send_salebot_message(client_id, reply)
+    try:
+        send_salebot_message(client_id, reply)
+    except Exception as send_err:
+        print(f"SaleBot SEND ERROR: client={client_id} err={send_err}", flush=True)
+        return
     log_dialog("SaleBot", client_id, user_name, user_message, reply)
 
     reason = human_attention_reason(user_message, reply)
