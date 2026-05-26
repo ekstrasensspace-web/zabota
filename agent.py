@@ -1655,6 +1655,22 @@ def process_salebot_message(payload, _debug_entry=None):
         processed_salebot_events.add(event_key)
         if len(processed_salebot_events) > 1000:
             processed_salebot_events.clear()
+    # Игнорируем сообщения с видео/аудио/файлами — только текст
+    attachments = []
+    msg_data = payload.get("message") if isinstance(payload.get("message"), dict) else {}
+    if isinstance(msg_data, dict):
+        attachments = msg_data.get("attachments", []) or []
+    if not attachments:
+        attachments = payload.get("attachments", []) or []
+    if isinstance(attachments, list) and attachments:
+        media_types = {"video", "audio", "doc", "file", "voice", "video_message", "sticker"}
+        for att in attachments:
+            att_type = str(att.get("type", "") if isinstance(att, dict) else att).lower()
+            if any(t in att_type for t in media_types):
+                print(f"SaleBot SKIP[media]: client={client_id} type={att_type}", flush=True)
+                _set_result("⛔ медиафайл (видео/аудио)")
+                return
+
     if is_salebot_outgoing(payload):
         is_input_val = salebot_value(payload, "is_input")
         direction_val = salebot_value(payload, "direction", "message_direction", "sender_type", "author_type")
