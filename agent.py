@@ -1783,26 +1783,28 @@ def test_ai_endpoint():
     salebot_key = os.environ.get("SALEBOT_API_KEY", "")
     results.append(f"<b>SALEBOT_API_KEY:</b> {'✅ задан (' + salebot_key[:8] + '...)' if salebot_key else '❌ НЕ ЗАДАН'}")
 
-    # Тест Gemini
+    # Тест Gemini — пробуем все модели по очереди
     if GEMINI_API_KEY:
-        try:
-            url = (
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-            )
-            body = {
-                "contents": [{"parts": [{"text": "Ответь одним словом: работает"}]}],
-                "generationConfig": {"maxOutputTokens": 50, "temperature": 0.0},
-            }
-            resp = requests.post(url, json=body, timeout=15)
-            if resp.status_code == 200:
-                data = resp.json()
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
-                results.append(f"<b>Gemini тест:</b> ✅ ответил: <i>{text[:200]}</i>")
-            else:
-                results.append(f"<b>Gemini тест:</b> ❌ HTTP {resp.status_code}: {resp.text[:300]}")
-        except Exception as e:
-            results.append(f"<b>Gemini тест:</b> ❌ Exception: {e}")
+        body = {
+            "contents": [{"parts": [{"text": "Ответь одним словом: работает"}]}],
+            "generationConfig": {"maxOutputTokens": 50, "temperature": 0.0},
+        }
+        for model in ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash"]:
+            try:
+                url = (
+                    "https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{model}:generateContent?key={GEMINI_API_KEY}"
+                )
+                resp = requests.post(url, json=body, timeout=15)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    text = data["candidates"][0]["content"]["parts"][0]["text"]
+                    results.append(f"<b>Gemini [{model}]:</b> ✅ ответил: <i>{text[:200]}</i>")
+                    break
+                else:
+                    results.append(f"<b>Gemini [{model}]:</b> ❌ HTTP {resp.status_code}: {resp.text[:200]}")
+            except Exception as e:
+                results.append(f"<b>Gemini [{model}]:</b> ❌ Exception: {e}")
     else:
         results.append("<b>Gemini тест:</b> ⏭️ пропущен (ключ не задан)")
 
