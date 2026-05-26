@@ -758,42 +758,46 @@ def save_user(user_id):
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
 
 def call_gemini(system_prompt, user_message, max_tokens=1024):
-    """Вызов Gemini 2.0 Flash через HTTP — бесплатно, 1500 запросов/день.
-    При 429 (rate limit) делаем до 3 попыток с паузами 20/40 сек."""
+    """Вызов Gemini через HTTP — бесплатно.
+    При 429 пробует разные модели: gemini-2.0-flash → gemini-1.5-flash → gemini-1.5-flash-8b."""
     if not GEMINI_API_KEY:
         print("Gemini: GEMINI_API_KEY не задан — пропускаем", flush=True)
         return None
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    )
     full_prompt = system_prompt + "\n\n---\nСообщение клиента:\n" + user_message
     body = {
         "contents": [{"parts": [{"text": full_prompt}]}],
         "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7},
     }
-    retry_delays = [20, 40]  # секунды паузы перед повтором при 429
-    for attempt in range(3):
-        try:
-            resp = requests.post(url, json=body, timeout=30)
-            if resp.status_code == 429:
-                if attempt < len(retry_delays):
-                    delay = retry_delays[attempt]
-                    print(f"Gemini 429 rate limit (attempt {attempt+1}/3), ждём {delay}с...", flush=True)
-                    time.sleep(delay)
-                    continue
-                else:
-                    print(f"Gemini 429 rate limit — исчерпаны попытки", flush=True)
-                    return None
-            resp.raise_for_status()
-            data = resp.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-        except requests.exceptions.HTTPError as exc:
-            print(f"Gemini API HTTP error: {exc}", flush=True)
-            return None
-        except Exception as exc:
-            print(f"Gemini API error: {exc}", flush=True)
-            return None
+    # Пробуем модели по очереди — у каждой свой лимит
+    models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
+    for model in models:
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model}:generateContent?key={GEMINI_API_KEY}"
+        )
+        for attempt in range(2):
+            try:
+                resp = requests.post(url, json=body, timeout=30)
+                if resp.status_code == 429:
+                    if attempt == 0:
+                        print(f"Gemini {model} 429, ждём 15с...", flush=True)
+                        time.sleep(15)
+                        continue
+                    else:
+                        print(f"Gemini {model} 429 повторно — пробуем следующую модель", flush=True)
+                        break  # переходим к следующей модели
+                resp.raise_for_status()
+                data = resp.json()
+                text = data["candidates"][0]["content"]["parts"][0]["text"]
+                print(f"Gemini {model} ответил успешно", flush=True)
+                return text
+            except requests.exceptions.HTTPError as exc:
+                print(f"Gemini {model} HTTP error: {exc}", flush=True)
+                break
+            except Exception as exc:
+                print(f"Gemini {model} error: {exc}", flush=True)
+                break
+    print("Gemini: все модели не ответили", flush=True)
     return None
 
 def call_ai(system_prompt, user_message, max_tokens=1024):
@@ -1584,6 +1588,13 @@ def process_salebot_message(payload, _debug_entry=None):
     if not reply:
         print(f"SaleBot SKIP[ai_silent]: client={client_id} msg={user_message[:80]!r}", flush=True)
         _set_result("❌ ИИ молчит (нет ответа)")
+        # AI недоступен — уведомляем команду чтобы ответили вручную
+        telegram_notify_sync(
+            f"⚠️ AI не ответил (лимит/ошибка)\n"
+            f"👤 {user_name} ({client_id}) — VK\n"
+            f"💬 {user_message[:200]}\n\n"
+            f"Ответьте клиенту вручную в SaleBot!"
+        )
         return
     _set_result(f"📤 отправляем ответ...")
     try:
