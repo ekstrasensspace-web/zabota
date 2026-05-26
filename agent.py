@@ -1702,6 +1702,8 @@ def process_getcourse_message(payload):
 def healthcheck():
     return jsonify({"ok": True, "service": "mas-bot"})
 
+_salebot_recent = []  # последние 20 входящих payload для диагностики
+
 @web_app.route("/salebot/webhook", methods=["GET", "POST"])
 @web_app.route("/salebot/webhook/", methods=["GET", "POST"])
 def salebot_webhook():
@@ -1713,9 +1715,54 @@ def salebot_webhook():
     if payload is None:
         payload = request.form.to_dict() or request.args.to_dict()
 
+    import datetime
+    _salebot_recent.append({"ts": datetime.datetime.now().strftime("%H:%M:%S"), "payload": payload})
+    if len(_salebot_recent) > 20:
+        _salebot_recent.pop(0)
+
     print(f"SaleBot webhook received: {payload}", flush=True)
     threading.Thread(target=process_salebot_message, args=(payload,), daemon=True).start()
     return jsonify({"ok": True})
+
+@web_app.route("/salebot/debug")
+def salebot_debug():
+    pwd = request.args.get("pwd", "")
+    if pwd != os.environ.get("ADMIN_PASSWORD", "mac2024"):
+        return "<h2>403</h2>", 403
+    import json, datetime
+    rows = ""
+    for item in reversed(_salebot_recent):
+        p = item["payload"]
+        client_id, msg, name = extract_salebot_payload(p)
+        outgoing = is_salebot_outgoing(p)
+        form = is_salebot_form_submission(p)
+        noise = is_salebot_noise_message(msg) if msg else True
+        passive = is_passive_funnel_message(msg) if msg else True
+        if outgoing: verdict = "⛔ outgoing"
+        elif form:   verdict = "⛔ form/anketa"
+        elif noise:  verdict = "⛔ noise"
+        elif passive: verdict = "⛔ passive (не вопрос)"
+        else:        verdict = "✅ передан ИИ"
+        raw = json.dumps(p, ensure_ascii=False)[:600]
+        rows += f"""
+        <tr>
+          <td style='white-space:nowrap'>{item['ts']}</td>
+          <td>{name}<br><small>{client_id}</small></td>
+          <td>{msg[:120] if msg else '<i>пусто</i>'}</td>
+          <td><b>{verdict}</b></td>
+          <td><small style='color:#888'>{raw}</small></td>
+        </tr>"""
+    if not rows:
+        rows = "<tr><td colspan=5 style='text-align:center;padding:40px'>Нет данных — SaleBot ещё не прислал ни одного вебхука</td></tr>"
+    return f"""<!doctype html><html><head><meta charset=utf-8>
+    <title>SaleBot Debug</title>
+    <style>body{{font-family:sans-serif;padding:20px}}table{{border-collapse:collapse;width:100%}}
+    th,td{{border:1px solid #ddd;padding:8px;vertical-align:top}}th{{background:#f5f5f5}}</style>
+    </head><body>
+    <h2>SaleBot — последние вебхуки</h2>
+    <p>Всего получено: <b>{len(_salebot_recent)}</b> | <a href='?pwd={pwd}'>обновить</a></p>
+    <table><thead><tr><th>Время</th><th>Клиент</th><th>Сообщение</th><th>Результат</th><th>Raw payload</th></tr></thead>
+    <tbody>{rows}</tbody></table></body></html>"""
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "mac2024")
 
