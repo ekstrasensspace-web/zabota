@@ -2639,10 +2639,42 @@ async def handle_decode_command(update: Update, context: ContextTypes.DEFAULT_TY
 
 from telegram.ext import filters as tg_filters
 
+async def _admin_only(update: Update, context: ContextTypes.DEFAULT_TYPE, action):
+    """Обёртка: выполняем action только если команду прислал администратор."""
+    if update.effective_user and update.effective_user.id == ADMIN_CHAT_ID:
+        await action(update, context)
+
+async def cmd_takeover_sb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Забрать VK-диалог у бота (/takeover_sb CLIENT_ID) — из любого чата."""
+    if not (update.effective_user and update.effective_user.id == ADMIN_CHAT_ID):
+        return
+    parts = (update.message.text or "").split()
+    if len(parts) < 2:
+        await update.message.reply_text("Укажите client_id: /takeover_sb 123456")
+        return
+    cid = parts[1].strip()
+    paused_salebot_clients.add(str(cid))
+    cancel_salebot_followup(cid)
+    await update.message.reply_text(f"✅ Диалог {cid} забран. Бот молчит — отвечайте в SaleBot.")
+
+async def cmd_release_sb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Вернуть VK-диалог боту (/release_sb CLIENT_ID) — из любого чата."""
+    if not (update.effective_user and update.effective_user.id == ADMIN_CHAT_ID):
+        return
+    parts = (update.message.text or "").split()
+    if len(parts) < 2:
+        await update.message.reply_text("Укажите client_id: /release_sb 123456")
+        return
+    cid = parts[1].strip()
+    paused_salebot_clients.discard(str(cid))
+    await update.message.reply_text(f"✅ Бот снова отвечает клиенту {cid}.")
+
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(CommandHandler("start", handle_start))
 app.add_handler(CommandHandler("chatid", handle_chatid))
 app.add_handler(CommandHandler("decode", handle_decode_command))
+app.add_handler(CommandHandler("takeover_sb", cmd_takeover_sb))
+app.add_handler(CommandHandler("release_sb", cmd_release_sb))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_message))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=-1001752036351), handle_public_symbol_decode))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_public_symbol_decode))
