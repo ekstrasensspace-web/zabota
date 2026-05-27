@@ -823,6 +823,22 @@ def save_user(user_id):
 
 client = anthropic.Anthropic(api_key=CLAUDE_API_KEY) if CLAUDE_API_KEY else None
 
+# === Защита от перерасхода токенов: счётчик вызовов AI по провайдерам ===
+import datetime as _dt
+
+_ai_stats: dict = {"date": None, "groq": 0, "gemini": 0, "claude": 0, "failed": 0}
+_ai_stats_lock = threading.Lock()
+CLAUDE_DAILY_LIMIT = 30  # максимум платных вызовов Claude в сутки (жёсткий стоп)
+
+def _ai_stat_bump(provider: str) -> dict:
+    """Считаем вызовы по провайдеру. Сбрасываем счётчик в новые сутки (UTC)."""
+    with _ai_stats_lock:
+        today = _dt.date.today().isoformat()
+        if _ai_stats["date"] != today:
+            _ai_stats.update({"date": today, "groq": 0, "gemini": 0, "claude": 0, "failed": 0})
+        _ai_stats[provider] = _ai_stats.get(provider, 0) + 1
+        return dict(_ai_stats)
+
 def call_groq(system_prompt, user_message, max_tokens=1024):
     """Groq API — бесплатно, 14400 запросов/день, очень быстро."""
     if not GROQ_API_KEY:
@@ -847,6 +863,7 @@ def call_groq(system_prompt, user_message, max_tokens=1024):
             return None
         resp.raise_for_status()
         text = resp.json()["choices"][0]["message"]["content"]
+        _ai_stat_bump("groq")
         print("Groq ответил успешно", flush=True)
         return text
     except Exception as exc:
@@ -897,6 +914,7 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
                 resp.raise_for_status()
                 data = resp.json()
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
+                _ai_stat_bump("gemini")
                 print(f"Gemini {model} ({api_ver}) ответил успешно", flush=True)
                 return text
             except requests.exceptions.HTTPError as exc:
@@ -909,15 +927,28 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
     return None
 
 def call_ai(system_prompt, user_message, max_tokens=1024):
-    """Groq (основной) → Gemini (запасной) → Claude (платный)."""
+    """Groq (основной) → Gemini (запасной) → Claude (платный, с лимитом)."""
     reply = call_groq(system_prompt, user_message, max_tokens)
     if reply:
         return reply
     reply = call_gemini(system_prompt, user_message, max_tokens)
     if reply:
         return reply
-    # Fallback на Claude (платный — ограничиваем промпт чтобы не сжечь кредиты)
+    # Fallback на Claude (платный) — только если не превышен дневной лимит
     if client:
+        with _ai_stats_lock:
+            today = _dt.date.today().isoformat()
+            if _ai_stats["date"] != today:
+                _ai_stats.update({"date": today, "groq": 0, "gemini": 0, "claude": 0, "failed": 0})
+            claude_today = _ai_stats.get("claude", 0)
+        if claude_today >= CLAUDE_DAILY_LIMIT:
+            print(f"Claude дневной лимит {CLAUDE_DAILY_LIMIT} исчерпан — AI молчит", flush=True)
+            _ai_stat_bump("failed")
+            telegram_notify_sync(
+                f"⛔ Claude дневной лимит ({CLAUDE_DAILY_LIMIT} вызовов) исчерпан!\n"
+                f"Бот не отвечает до конца дня (UTC). Проверьте Groq и Gemini."
+            )
+            return None
         try:
             claude_system = system_prompt[:60000] if len(system_prompt) > 60000 else system_prompt
             response = client.messages.create(
@@ -926,9 +957,19 @@ def call_ai(system_prompt, user_message, max_tokens=1024):
                 system=[{"type": "text", "text": claude_system, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": user_message}]
             )
+            stats = _ai_stat_bump("claude")
+            print(f"Claude fallback (платный): вызов #{stats['claude']} сегодня", flush=True)
+            # Предупреждаем при первом вызове Claude и каждые 5 после
+            if stats["claude"] == 1 or stats["claude"] % 5 == 0:
+                telegram_notify_sync(
+                    f"⚠️ Claude (платный) задействован: {stats['claude']} раз сегодня\n"
+                    f"(лимит: {CLAUDE_DAILY_LIMIT}/день)\n"
+                    f"Groq и Gemini не ответили — проверьте /test-ai"
+                )
             return response.content[0].text
         except Exception as exc:
             print(f"Claude API error (fallback): {exc}", flush=True)
+    _ai_stat_bump("failed")
     return None
 conversation_history = {}
 
@@ -2180,6 +2221,13 @@ def admin_panel():
 <header>
   <h1>💬 Диалоги бота</h1>
   <span class="count">Всего: {total} | Страница {page}/{total_pages}</span>
+  <span class="count" style="margin-left:auto">
+    🤖 AI сегодня ({_ai_stats.get("date","—")}):
+    Groq {_ai_stats.get("groq",0)} |
+    Gemini {_ai_stats.get("gemini",0)} |
+    ⚠️ Claude {_ai_stats.get("claude",0)}/{CLAUDE_DAILY_LIMIT} |
+    ❌ Нет ответа {_ai_stats.get("failed",0)}
+  </span>
 </header>
 <div class="toolbar">
   <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;width:100%">
@@ -2432,7 +2480,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📊 Статистика бота:\n\n"
                 f"👥 Всего уникальных пользователей: {total}\n"
                 f"💬 Активных диалогов сейчас: {active}\n"
-                f"🤝 На ручном управлении: {manual}"
+                f"🤝 На ручном управлении: {manual}\n\n"
+                f"🤖 AI сегодня ({_ai_stats.get('date','—')}):\n"
+                f"  ✅ Groq: {_ai_stats.get('groq',0)} вызовов (бесплатно)\n"
+                f"  🔁 Gemini: {_ai_stats.get('gemini',0)} вызовов (бесплатно)\n"
+                f"  ⚠️ Claude: {_ai_stats.get('claude',0)}/{CLAUDE_DAILY_LIMIT} вызовов (платно!)\n"
+                f"  ❌ Нет ответа: {_ai_stats.get('failed',0)}"
             )
             return
 
