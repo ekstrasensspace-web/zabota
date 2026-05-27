@@ -557,6 +557,11 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 - Закрывай примерно так: "Есть специальный путь для тех кто только открывает свои способности — 5 шагов от первого знакомства с даром до понимания своего предназначения. Можно брать по одному, но в наборе выгоднее — 14 990 ₽ вместо 19 000 ₽. С чего хотите начать?"
 - Шаг 1 (490 ₽) — идеальный первый шаг для тех кто сомневается или боится
 
+КОРОТКИЕ / НЕПОНЯТНЫЕ СООБЩЕНИЯ — ВАЖНО:
+- Если клиент написал одно слово без контекста ("тест", "test", "привет", "hello", "проверка", "хай", "ок") — НЕ предлагай курсы и продукты. Просто поздоровайся и спроси что его интересует.
+- Слово "тест" от клиента — это техническая проверка связи, НЕ запрос о тесте "Матрица Звёздной Души". Ответь: "Добрый день! Чем могу помочь?"
+- Не угадывай намерение клиента по одному слову — задай уточняющий вопрос.
+
 ЗВЁЗДНЫЕ ЦИВИЛИЗАЦИИ / ЛЕМУРИЯ / ЛУНА — ВАЖНО:
 - "Матрица Звёздной Души" — это тест/диагностика, НЕ курс. У него нет модулей обучения. НИКОГДА не говори "курс Матрица Звёздной Души" и не придумывай модули, цены и программу.
 - Если клиент спрашивает как глубже узнать связь со звёздными цивилизациями, Лемурией, Луной, звёздной семьёй — отвечай мягко: это можно исследовать через тест "Матрица Звёздной Души" и через курс "Научный ченнелинг", где человек учится получать ответы из тонкого плана.
@@ -2669,12 +2674,46 @@ async def cmd_release_sb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     paused_salebot_clients.discard(str(cid))
     await update.message.reply_text(f"✅ Бот снова отвечает клиенту {cid}.")
 
+async def cmd_takeover(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Забрать Telegram-диалог у бота (/takeover USER_ID) — из любого чата."""
+    if not (update.effective_user and update.effective_user.id == ADMIN_CHAT_ID):
+        return
+    parts = (update.message.text or "").split()
+    if len(parts) < 2:
+        await update.message.reply_text("Укажите user_id: /takeover 123456")
+        return
+    try:
+        tid = int(parts[1].strip())
+    except ValueError:
+        await update.message.reply_text("USER_ID должен быть числом.")
+        return
+    paused_users.add(tid)
+    await update.message.reply_text(f"✅ Диалог {tid} забран. Бот молчит — отвечайте клиенту напрямую.")
+
+async def cmd_release(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Вернуть Telegram-диалог боту (/release USER_ID) — из любого чата."""
+    if not (update.effective_user and update.effective_user.id == ADMIN_CHAT_ID):
+        return
+    parts = (update.message.text or "").split()
+    if len(parts) < 2:
+        await update.message.reply_text("Укажите user_id: /release 123456")
+        return
+    try:
+        tid = int(parts[1].strip())
+    except ValueError:
+        await update.message.reply_text("USER_ID должен быть числом.")
+        return
+    paused_users.discard(tid)
+    await update.message.reply_text(f"✅ Бот снова отвечает пользователю {tid}.")
+
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(CommandHandler("start", handle_start))
 app.add_handler(CommandHandler("chatid", handle_chatid))
 app.add_handler(CommandHandler("decode", handle_decode_command))
 app.add_handler(CommandHandler("takeover_sb", cmd_takeover_sb))
 app.add_handler(CommandHandler("release_sb", cmd_release_sb))
+app.add_handler(CommandHandler("takeover", cmd_takeover))
+app.add_handler(CommandHandler("release", cmd_release))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_message))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=-1001752036351), handle_public_symbol_decode))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_public_symbol_decode))
