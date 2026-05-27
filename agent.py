@@ -2803,7 +2803,8 @@ async def _debug_group_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
           f"text={repr((msg.text or '')[:50]) if msg else '?'}", flush=True)
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.SUPERGROUP), _debug_group_msg), group=1)
 # Ответы сотрудников в зеркальной группе → пересылка клиентам
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.REPLY & (filters.ChatType.GROUPS | filters.ChatType.SUPERGROUP), handle_mirror_reply))
+# handle_mirror_reply только для зеркальной группы — чтобы не перехватывать публичный чат
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.REPLY & filters.Chat(chat_id=LOG_CHANNEL_ID), handle_mirror_reply))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=-1001752036351), handle_public_symbol_decode))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL | filters.ChatType.SUPERGROUP), handle_public_symbol_decode))
 
