@@ -977,7 +977,8 @@ def schedule_salebot_followup(client_id, user_name, last_question):
     salebot_followup_timers[client_id] = timer
     timer.start()
     print(f"SaleBot followup scheduled for {client_id} in 10 min", flush=True)
-paused_users = set()        # пользователи на ручном управлении
+paused_users = set()        # Telegram-пользователи на ручном управлении
+paused_salebot_clients = set()  # VK/SaleBot-клиенты на ручном управлении
 forwarded_map = {}          # message_id пересланного сообщения → user_id клиента
 known_users = load_known_users()
 processed_salebot_events = set()
@@ -1710,6 +1711,12 @@ def process_salebot_message(payload, _debug_entry=None):
     if client_id:
         cancel_salebot_followup(client_id)
 
+    # Диалог на ручном управлении — бот молчит
+    if str(client_id) in paused_salebot_clients:
+        print(f"SaleBot SKIP[manual]: client={client_id} — диалог взят оператором", flush=True)
+        _set_result("⏸️ ручное управление")
+        return
+
     if not client_id or not user_message:
         print(f"SaleBot SKIP[no_id_or_msg]: Payload={payload}", flush=True)
         _set_result("⛔ нет ID или текста")
@@ -1822,7 +1829,9 @@ def process_salebot_message(payload, _debug_entry=None):
         telegram_notify_sync(
             f"👤 SaleBot — {user_name} ({client_id})\n"
             f"{salebot_channel_info(payload)}:\n{user_message}\n\n"
-            f"🤖 Бот:\n{reply_preview}"
+            f"🤖 Бот:\n{reply_preview}\n\n"
+            f"▶️ Забрать диалог: /takeover_sb {client_id}\n"
+            f"🔁 Вернуть боту: /release_sb {client_id}"
         )
     print(f"SaleBot reply sent to {client_id} ({salebot_channel_info(payload)})", flush=True)
 
@@ -2385,6 +2394,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 tid = int(parts[1])
                 paused_users.discard(tid)
                 await update.message.reply_text(f"✅ Бот снова отвечает пользователю {tid}.")
+            return
+        # /takeover_sb CLIENT_ID — взять VK-диалог вручную
+        if user_message.startswith("/takeover_sb"):
+            parts = user_message.split()
+            if len(parts) > 1:
+                cid = parts[1]
+                paused_salebot_clients.add(str(cid))
+                cancel_salebot_followup(cid)
+                await update.message.reply_text(f"✅ Диалог {cid} забран. Бот молчит — вы отвечаете в SaleBot.")
+            return
+        # /release_sb CLIENT_ID — вернуть VK-диалог боту
+        if user_message.startswith("/release_sb"):
+            parts = user_message.split()
+            if len(parts) > 1:
+                cid = parts[1]
+                paused_salebot_clients.discard(str(cid))
+                await update.message.reply_text(f"✅ Бот снова отвечает клиенту {cid}.")
             return
         # /stats — сколько всего уникальных пользователей
         if user_message.startswith("/stats"):
