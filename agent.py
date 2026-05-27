@@ -2052,12 +2052,12 @@ def test_ai_endpoint():
             resp = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-                json={"model": "llama-3.1-8b-instant", "messages": [{"role": "user", "content": "Скажи: работает"}], "max_tokens": 20},
+                json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": "Скажи: работает"}], "max_tokens": 20},
                 timeout=15
             )
             if resp.status_code == 200:
                 text = resp.json()["choices"][0]["message"]["content"]
-                results.append(f"<b>Groq [llama-3.1-8b]:</b> ✅ ответил: <i>{text[:200]}</i>")
+                results.append(f"<b>Groq [llama-3.3-70b]:</b> ✅ ответил: <i>{text[:200]}</i>")
             else:
                 results.append(f"<b>Groq:</b> ❌ HTTP {resp.status_code}: {resp.text[:200]}")
         except Exception as e:
