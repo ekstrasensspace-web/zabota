@@ -2707,6 +2707,38 @@ async def cmd_release(update: Update, context: ContextTypes.DEFAULT_TYPE):
     paused_users.discard(tid)
     await update.message.reply_text(f"✅ Бот снова отвечает пользователю {tid}.")
 
+async def handle_mirror_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик ответов сотрудников в зеркальной группе.
+    Если сотрудник отвечает (Reply) на уведомление бота — пересылаем текст клиенту."""
+    if not update.message or not update.message.reply_to_message:
+        return
+    # Только сотрудники из ADMIN_IDS
+    if not (update.effective_user and update.effective_user.id in ADMIN_IDS):
+        return
+    user_message = (update.message.text or "").strip()
+    if not user_message:
+        return
+    orig_id = update.message.reply_to_message.message_id
+    # Ответ на VK/SaleBot уведомление
+    if orig_id in salebot_mirror_map:
+        sb_client_id, sb_name = salebot_mirror_map[orig_id]
+        try:
+            send_salebot_message(sb_client_id, user_message)
+            log_dialog("SaleBot", sb_client_id, sb_name, "[оператор]", user_message)
+            await update.message.reply_text(f"✅ Отправлено в VK клиенту {sb_name}.")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка отправки в VK: {e}")
+        return
+    # Ответ на Telegram уведомление
+    if orig_id in forwarded_map:
+        client_id = forwarded_map[orig_id]
+        try:
+            await context.bot.send_message(chat_id=client_id, text=user_message)
+            await update.message.reply_text(f"✅ Отправлено Telegram-клиенту.")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Ошибка отправки: {e}")
+        return
+
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(CommandHandler("start", handle_start))
 app.add_handler(CommandHandler("chatid", handle_chatid))
@@ -2716,6 +2748,8 @@ app.add_handler(CommandHandler("release_sb", cmd_release_sb))
 app.add_handler(CommandHandler("takeover", cmd_takeover))
 app.add_handler(CommandHandler("release", cmd_release))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_message))
+# Ответы сотрудников в зеркальной группе → пересылка клиентам
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=LOG_CHANNEL_ID), handle_mirror_reply))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=-1001752036351), handle_public_symbol_decode))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_public_symbol_decode))
 
