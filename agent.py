@@ -2753,11 +2753,20 @@ app.add_handler(CommandHandler("release_sb", cmd_release_sb))
 app.add_handler(CommandHandler("takeover", cmd_takeover))
 app.add_handler(CommandHandler("release", cmd_release))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_message))
+# Диагностика: логируем ВСЕ сообщения из групп чтобы видеть что доходит
+async def _debug_group_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+    msg = update.message
+    is_reply = bool(msg and msg.reply_to_message)
+    print(f"GROUP MSG: chat_id={chat.id if chat else '?'} type={chat.type if chat else '?'} "
+          f"user={user.id if user else '?'} is_reply={is_reply} "
+          f"text={repr((msg.text or '')[:50]) if msg else '?'}", flush=True)
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.SUPERGROUP), _debug_group_msg), group=1)
 # Ответы сотрудников в зеркальной группе → пересылка клиентам
-# Ловим reply от сотрудников в ЛЮБОЙ группе (фильтр по chat_id ненадёжен из-за supergroup migration)
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.REPLY & filters.ChatType.GROUPS, handle_mirror_reply))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.REPLY & (filters.ChatType.GROUPS | filters.ChatType.SUPERGROUP), handle_mirror_reply))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=-1001752036351), handle_public_symbol_decode))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_public_symbol_decode))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL | filters.ChatType.SUPERGROUP), handle_public_symbol_decode))
 
 # ─── Telegram через webhook вместо polling ────────────────────────────────────
 # Polling вызывает Conflict-ошибку при деплое (два контейнера одновременно).
