@@ -2707,6 +2707,43 @@ async def cmd_release(update: Update, context: ContextTypes.DEFAULT_TYPE):
     paused_users.discard(tid)
     await update.message.reply_text(f"✅ Бот снова отвечает пользователю {tid}.")
 
+async def cmd_reply_sb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/reply_sb CLIENT_ID текст — написать VK клиенту напрямую из любого чата."""
+    if not (update.effective_user and update.effective_user.id in ADMIN_IDS):
+        return
+    parts = (update.message.text or "").split(maxsplit=2)
+    if len(parts) < 3:
+        await update.message.reply_text("Формат: /reply_sb 123456 Ваш текст ответа")
+        return
+    cid = parts[1].strip()
+    text = parts[2].strip()
+    try:
+        send_salebot_message(cid, text)
+        await update.message.reply_text(f"✅ Отправлено VK клиенту {cid}.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+
+async def cmd_reply_tg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/reply_tg USER_ID текст — написать Telegram клиенту напрямую."""
+    if not (update.effective_user and update.effective_user.id in ADMIN_IDS):
+        return
+    parts = (update.message.text or "").split(maxsplit=2)
+    if len(parts) < 3:
+        await update.message.reply_text("Формат: /reply_tg 123456 Ваш текст ответа")
+        return
+    try:
+        uid = int(parts[1].strip())
+    except ValueError:
+        await update.message.reply_text("USER_ID должен быть числом.")
+        return
+    text = parts[2].strip()
+    try:
+        await context.bot.send_message(chat_id=uid, text=text)
+        await update.message.reply_text(f"✅ Отправлено Telegram клиенту {uid}.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+
+
 async def handle_mirror_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик ответов сотрудников в зеркальной группе.
     Если сотрудник отвечает (Reply) на уведомление бота — пересылаем текст клиенту."""
@@ -2752,6 +2789,8 @@ app.add_handler(CommandHandler("takeover_sb", cmd_takeover_sb))
 app.add_handler(CommandHandler("release_sb", cmd_release_sb))
 app.add_handler(CommandHandler("takeover", cmd_takeover))
 app.add_handler(CommandHandler("release", cmd_release))
+app.add_handler(CommandHandler("reply_sb", cmd_reply_sb))
+app.add_handler(CommandHandler("reply_tg", cmd_reply_tg))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_message))
 # Диагностика: логируем ВСЕ сообщения из групп чтобы видеть что доходит
 async def _debug_group_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
