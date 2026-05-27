@@ -2712,13 +2712,18 @@ async def handle_mirror_reply(update: Update, context: ContextTypes.DEFAULT_TYPE
     Если сотрудник отвечает (Reply) на уведомление бота — пересылаем текст клиенту."""
     if not update.message or not update.message.reply_to_message:
         return
+    sender_id = update.effective_user.id if update.effective_user else None
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    print(f"Mirror group reply: sender={sender_id}, chat={chat_id}, admins={ADMIN_IDS}", flush=True)
     # Только сотрудники из ADMIN_IDS
-    if not (update.effective_user and update.effective_user.id in ADMIN_IDS):
+    if not (sender_id and sender_id in ADMIN_IDS):
+        print(f"Mirror reply ignored: sender {sender_id} not in ADMIN_IDS", flush=True)
         return
     user_message = (update.message.text or "").strip()
     if not user_message:
         return
     orig_id = update.message.reply_to_message.message_id
+    print(f"Mirror reply: orig_msg_id={orig_id}, salebot_map_keys={list(salebot_mirror_map.keys())[-5:]}, fwd_map_keys={list(forwarded_map.keys())[-5:]}", flush=True)
     # Ответ на VK/SaleBot уведомление
     if orig_id in salebot_mirror_map:
         sb_client_id, sb_name = salebot_mirror_map[orig_id]
@@ -2749,7 +2754,8 @@ app.add_handler(CommandHandler("takeover", cmd_takeover))
 app.add_handler(CommandHandler("release", cmd_release))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_message))
 # Ответы сотрудников в зеркальной группе → пересылка клиентам
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=LOG_CHANNEL_ID), handle_mirror_reply))
+# Ловим reply от сотрудников в ЛЮБОЙ группе (фильтр по chat_id ненадёжен из-за supergroup migration)
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.REPLY & filters.ChatType.GROUPS, handle_mirror_reply))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Chat(chat_id=-1001752036351), handle_public_symbol_decode))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & (filters.ChatType.GROUPS | filters.ChatType.CHANNEL), handle_public_symbol_decode))
 
