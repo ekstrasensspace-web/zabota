@@ -809,7 +809,8 @@ model = None
 collection = None
 print("Запуск без RAG (экономия памяти)")
 
-ADMIN_CHAT_ID = 430615810       # личный чат — для команд /takeover /release
+ADMIN_CHAT_ID = 430615810       # Наташа — основной админ (уведомления идут сюда)
+ADMIN_IDS = {430615810, 887006105}  # Наташа + Юлия — оба могут давать команды
 LOG_CHANNEL_ID = -5086804302   # канал — сюда идут все диалоги
 
 USERS_FILE = os.path.join(BASE_DIR, "users.txt")
@@ -2429,7 +2430,7 @@ async def notify_admin(context, user_id, user_name, user_message, bot_reply=None
 
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    if user_id == ADMIN_CHAT_ID:
+    if user_id in ADMIN_IDS:
         return
     await update.message.reply_text(
         "Вас приветствует служба заботы Международной Академии Сверхспособностей 🌟\n\n"
@@ -2442,7 +2443,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.message.from_user.first_name or str(user_id)
 
     # ── Сообщения от администратора ──────────────────────────────────────────
-    if user_id == ADMIN_CHAT_ID:
+    if user_id in ADMIN_IDS:
         # /takeover USER_ID — взять диалог вручную
         if user_message.startswith("/takeover"):
             parts = user_message.split()
@@ -2646,12 +2647,12 @@ from telegram.ext import filters as tg_filters
 
 async def _admin_only(update: Update, context: ContextTypes.DEFAULT_TYPE, action):
     """Обёртка: выполняем action только если команду прислал администратор."""
-    if update.effective_user and update.effective_user.id == ADMIN_CHAT_ID:
+    if update.effective_user and update.effective_user.id in ADMIN_IDS:
         await action(update, context)
 
 async def cmd_takeover_sb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Забрать VK-диалог у бота (/takeover_sb CLIENT_ID) — из любого чата."""
-    if not (update.effective_user and update.effective_user.id == ADMIN_CHAT_ID):
+    if not (update.effective_user and update.effective_user.id in ADMIN_IDS):
         return
     parts = (update.message.text or "").split()
     if len(parts) < 2:
@@ -2664,7 +2665,7 @@ async def cmd_takeover_sb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_release_sb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Вернуть VK-диалог боту (/release_sb CLIENT_ID) — из любого чата."""
-    if not (update.effective_user and update.effective_user.id == ADMIN_CHAT_ID):
+    if not (update.effective_user and update.effective_user.id in ADMIN_IDS):
         return
     parts = (update.message.text or "").split()
     if len(parts) < 2:
@@ -2676,7 +2677,7 @@ async def cmd_release_sb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_takeover(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Забрать Telegram-диалог у бота (/takeover USER_ID) — из любого чата."""
-    if not (update.effective_user and update.effective_user.id == ADMIN_CHAT_ID):
+    if not (update.effective_user and update.effective_user.id in ADMIN_IDS):
         return
     parts = (update.message.text or "").split()
     if len(parts) < 2:
@@ -2692,7 +2693,7 @@ async def cmd_takeover(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_release(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Вернуть Telegram-диалог боту (/release USER_ID) — из любого чата."""
-    if not (update.effective_user and update.effective_user.id == ADMIN_CHAT_ID):
+    if not (update.effective_user and update.effective_user.id in ADMIN_IDS):
         return
     parts = (update.message.text or "").split()
     if len(parts) < 2:
