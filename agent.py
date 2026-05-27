@@ -2536,7 +2536,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Обычный режим — отвечает бот
-    reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_id, user_message)
+    # Сначала проверяем на расшифровку символов (цвет + цифра + символ)
+    if looks_like_symbol_decode_request(user_message):
+        reply = generate_symbol_decode_reply(user_message, language="ru")
+    else:
+        reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_id, user_message)
     await update.message.reply_text(reply)
     attention_reason = human_attention_reason(user_message, reply)
 
