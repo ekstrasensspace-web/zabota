@@ -745,16 +745,9 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 
 {schedule}
 
-{products_section}
-
 {similar_section}"""
 
 import gc
-
-print("Загружаю карты продуктов...")
-with open(os.path.join(BASE_DIR, "products.txt"), "r", encoding="utf-8") as f:
-    products = f.read()
-print(f"products.txt загружен, {len(products)} символов")
 
 # === База знаний: карточки курсов (загружаются по ключевым словам) ===
 _KB_SECTIONS = {}
@@ -836,8 +829,8 @@ def call_groq(system_prompt, user_message, max_tokens=1024):
         return None
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    # Groq имеет лимит на размер запроса — обрезаем системный промпт до 12000 символов
-    groq_system = system_prompt[:12000] if len(system_prompt) > 12000 else system_prompt
+    # Groq: без products.txt промпт ~47k chars — влезает в 128k-контекст без обрезания
+    groq_system = system_prompt[:60000] if len(system_prompt) > 60000 else system_prompt
     body = {
         "model": "llama-3.3-70b-versatile",
         "messages": [
@@ -867,7 +860,9 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
     if not GEMINI_API_KEY:
         print("Gemini: GEMINI_API_KEY не задан — пропускаем", flush=True)
         return None
-    full_prompt = system_prompt + "\n\n---\nСообщение клиента:\n" + user_message
+    # Защита от огромных промптов (Gemini бесплатный лимит — по токенам)
+    gemini_system = system_prompt[:60000] if len(system_prompt) > 60000 else system_prompt
+    full_prompt = gemini_system + "\n\n---\nСообщение клиента:\n" + user_message
     body = {
         "contents": [{"parts": [{"text": full_prompt}]}],
         "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7},
@@ -921,13 +916,14 @@ def call_ai(system_prompt, user_message, max_tokens=1024):
     reply = call_gemini(system_prompt, user_message, max_tokens)
     if reply:
         return reply
-    # Fallback на Claude
+    # Fallback на Claude (платный — ограничиваем промпт чтобы не сжечь кредиты)
     if client:
         try:
+            claude_system = system_prompt[:60000] if len(system_prompt) > 60000 else system_prompt
             response = client.messages.create(
                 model="claude-haiku-4-5",
                 max_tokens=max_tokens,
-                system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
+                system=[{"type": "text", "text": claude_system, "cache_control": {"type": "ephemeral"}}],
                 messages=[{"role": "user", "content": user_message}]
             )
             return response.content[0].text
@@ -1220,7 +1216,6 @@ def build_system_prompt(similar=""):
         stream_recordings=STREAM_RECORDINGS,
         prices=PRICES,
         schedule=SCHEDULE,
-        products_section="=== КАРТЫ ПРОДУКТОВ ===\n" + products,
         similar_section="=== ПОХОЖИЕ ДИАЛОГИ ИЗ ПРАКТИКИ ===\n" + similar
     )
 
