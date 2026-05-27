@@ -1437,15 +1437,18 @@ def public_question_redirect_reply():
     )
 
 def telegram_notify_sync(text):
-    """Синхронное уведомление в канал мониторинга для вебхуков SaleBot."""
+    """Синхронное уведомление в канал мониторинга. Возвращает message_id отправленного сообщения."""
     try:
-        requests.post(
+        resp = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id": LOG_CHANNEL_ID, "text": text[:3900]},
             timeout=10,
         )
+        data = resp.json()
+        return data.get("result", {}).get("message_id")
     except Exception as exc:
         print(f"Не удалось отправить уведомление в Telegram: {exc}", flush=True)
+        return None
 
 def send_bot_message_sync(chat_id, text, reply_to_message_id=None):
     payload = {"chat_id": chat_id, "text": text[:3900]}
@@ -1459,6 +1462,11 @@ def send_bot_message_sync(chat_id, text, reply_to_message_id=None):
     )
     if response.status_code >= 400:
         raise RuntimeError(f"Telegram sendMessage error {response.status_code}: {response.text[:500]}")
+    return response.json()  # возвращаем результат с message_id
+
+# Маппинг: Telegram message_id уведомления → SaleBot client_id
+# Позволяет ответить на уведомление в зеркале и отправить ответ клиенту в VK
+salebot_mirror_map = {}  # {tg_message_id: (salebot_client_id, client_name)}
 
 def salebot_value(payload, *keys):
     for key in keys:
@@ -1826,13 +1834,21 @@ def process_salebot_message(payload, _debug_entry=None):
         ))
     else:
         reply_preview = reply[:600] + ("…" if len(reply) > 600 else "")
-        telegram_notify_sync(
+        msg_id = telegram_notify_sync(
             f"👤 SaleBot — {user_name} ({client_id})\n"
             f"{salebot_channel_info(payload)}:\n{user_message}\n\n"
             f"🤖 Бот:\n{reply_preview}\n\n"
+            f"↩️ Ответьте на это сообщение чтобы написать клиенту напрямую\n"
             f"▶️ Забрать диалог: /takeover_sb {client_id}\n"
             f"🔁 Вернуть боту: /release_sb {client_id}"
         )
+        if msg_id:
+            salebot_mirror_map[msg_id] = (str(client_id), user_name)
+            if len(salebot_mirror_map) > 500:
+                # чистим старые записи
+                keys = list(salebot_mirror_map.keys())
+                for k in keys[:200]:
+                    salebot_mirror_map.pop(k, None)
     print(f"SaleBot reply sent to {client_id} ({salebot_channel_info(payload)})", flush=True)
 
 def extract_getcourse_payload(raw_payload):
@@ -2435,10 +2451,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Ответ на пересланное сообщение → отправить клиенту
         if update.message.reply_to_message:
             orig_id = update.message.reply_to_message.message_id
+            # Ответ на Telegram-диалог
             if orig_id in forwarded_map:
                 client_id = forwarded_map[orig_id]
                 await context.bot.send_message(chat_id=client_id, text=user_message)
-                await update.message.reply_text(f"✅ Отправлено клиенту {client_id}.")
+                await update.message.reply_text(f"✅ Отправлено Telegram-клиенту {client_id}.")
+                return
+            # Ответ на SaleBot/VK уведомление из зеркала
+            if orig_id in salebot_mirror_map:
+                sb_client_id, sb_name = salebot_mirror_map[orig_id]
+                try:
+                    send_salebot_message(sb_client_id, user_message)
+                    log_dialog("SaleBot", sb_client_id, sb_name, "[оператор]", user_message)
+                    await update.message.reply_text(f"✅ Отправлено в VK клиенту {sb_name} ({sb_client_id}).")
+                except Exception as e:
+                    await update.message.reply_text(f"❌ Ошибка отправки: {e}")
                 return
         return  # прочие сообщения от админа игнорируем
 
