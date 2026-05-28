@@ -845,9 +845,34 @@ def _ai_stat_bump(provider: str) -> dict:
         _ai_stats[provider] = _ai_stats.get(provider, 0) + 1
         return dict(_ai_stats)
 
+def needs_schedule_context(user_message):
+    text = re.sub(r"\s+", " ", (user_message or "").lower()).strip()
+    return any(word in text for word in (
+        "когда", "старт", "начало", "начн", "поток", "распис",
+        "дата", "урок", "модуль", "эфир", "практик",
+    ))
+
+def build_groq_system_prompt(user_message):
+    """Короткая версия промпта для Groq: полный SYSTEM_PROMPT слишком большой и даёт 413."""
+    compact_rules = """
+Ты — консультант отдела заботы Международной Академии Сверхспособностей.
+Отвечай на языке клиента: русский или украинский.
+Тон тёплый, живой, по-человечески. Без markdown, звёздочек и заголовков.
+Отвечай кратко: 3-5 предложений, но не обрывай мысль.
+Используй только данные из цен и ссылок ниже. Не придумывай курсы, тарифы, цены и обещания.
+Если точной информации нет — скажи, что уточнишь у специалиста.
+Если клиент хочет оплатить — уточни: оплата картой российского банка или зарубежной картой.
+Если клиент пишет про доступ после оплаты — сначала попроси проверить Спам, Промоакции, Рассылки и Все письма.
+Не вмешивайся в воронки, отвечай только на явный вопрос или запрос.
+"""
+    parts = [compact_rules.strip(), PRICES.strip()]
+    if needs_schedule_context(user_message):
+        parts.append(SCHEDULE.strip())
+    return "\n\n".join(parts)
+
 def _call_groq_model(model, system_prompt, user_message, max_tokens, headers, url):
     """Один вызов Groq с заданной моделью, 3 попытки при 429."""
-    groq_system = system_prompt[:60000] if len(system_prompt) > 60000 else system_prompt
+    groq_system = system_prompt[:28000] if len(system_prompt) > 28000 else system_prompt
     body = {
         "model": model,
         "messages": [
@@ -886,14 +911,15 @@ def call_groq(system_prompt, user_message, max_tokens=1024):
         return None
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    groq_system_prompt = build_groq_system_prompt(user_message)
     # Основная модель — высокое качество, но 12K токенов в минуту
-    result = _call_groq_model("llama-3.3-70b-versatile", system_prompt, user_message, max_tokens, headers, url)
+    result = _call_groq_model("llama-3.3-70b-versatile", groq_system_prompt, user_message, max_tokens, headers, url)
     if result:
         _ai_stat_bump("groq")
         return result
     # Фолбек — groq/compound: 70K TPM, выдерживает одновременные запросы
     print("Groq llama перегружен — пробуем groq/compound...", flush=True)
-    result = _call_groq_model("groq/compound", system_prompt, user_message, max_tokens, headers, url)
+    result = _call_groq_model("groq/compound", groq_system_prompt, user_message, max_tokens, headers, url)
     if result:
         _ai_stat_bump("groq")
         return result
