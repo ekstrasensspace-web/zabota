@@ -1295,6 +1295,37 @@ def limit_text(text, max_len):
         return value
     return value[: max_len - 1].rstrip() + "…"
 
+def split_telegram_text(text, limit=3900):
+    """Telegram принимает до 4096 символов; режем аккуратно по абзацам."""
+    value = str(text or "")
+    if len(value) <= limit:
+        return [value]
+
+    chunks = []
+    rest = value
+    while len(rest) > limit:
+        cut = rest.rfind("\n\n", 0, limit)
+        if cut < limit * 0.5:
+            cut = rest.rfind("\n", 0, limit)
+        if cut < limit * 0.5:
+            cut = rest.rfind(" ", 0, limit)
+        if cut < limit * 0.5:
+            cut = limit
+        chunks.append(rest[:cut].strip())
+        rest = rest[cut:].strip()
+    if rest:
+        chunks.append(rest)
+    return [chunk for chunk in chunks if chunk]
+
+def symbol_reply_looks_incomplete(reply):
+    """AI иногда отдаёт расшифровку, оборванную на середине слова."""
+    value = re.sub(r"\s+", " ", (reply or "")).strip()
+    if len(value) < 260:
+        return True
+    if not value.endswith((".", "!", "?", "…", ")", "»", "✨", "💫", "🌟")):
+        return True
+    return False
+
 def fallback_reply_for_message(text):
     """Что отвечаем клиенту, если все AI-провайдеры временно не ответили."""
     return predefined_reply_for_message(text) or (
@@ -1569,10 +1600,13 @@ def generate_symbol_decode_reply(user_message, language="auto"):
         "Требования к языку: грамотный русский, никаких ошибок в глаголах (например: поможем, не помогим). "
         "Не повторяй название курса/клуба дважды. Не ставь диагнозы, не обещай исцеление."
     )
-    reply = call_ai(symbol_system, user_message, max_tokens=1000)
-    if reply:
+    reply = call_ai(symbol_system, user_message, max_tokens=1800)
+    if reply and not symbol_reply_looks_incomplete(reply):
         return reply
-    print(f"AI недоступен, использую локальную расшифровку", flush=True)
+    if reply:
+        print(f"AI вернул обрезанную расшифровку, использую локальную", flush=True)
+    else:
+        print(f"AI недоступен, использую локальную расшифровку", flush=True)
     return local_symbol_decode_reply(user_message, language=language)
 
 def is_allowed_public_decode_chat(chat):
@@ -1603,30 +1637,41 @@ def public_question_redirect_reply():
 def telegram_notify_sync(text):
     """Синхронное уведомление в канал мониторинга. Возвращает message_id отправленного сообщения."""
     try:
-        resp = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            json={"chat_id": LOG_CHANNEL_ID, "text": text[:3900]},
-            timeout=10,
-        )
-        data = resp.json()
-        return data.get("result", {}).get("message_id")
+        first_message_id = None
+        for chunk in split_telegram_text(text):
+            resp = requests.post(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                json={"chat_id": LOG_CHANNEL_ID, "text": chunk},
+                timeout=10,
+            )
+            data = resp.json()
+            if first_message_id is None:
+                first_message_id = data.get("result", {}).get("message_id")
+        return first_message_id
     except Exception as exc:
         print(f"Не удалось отправить уведомление в Telegram: {exc}", flush=True)
         return None
 
 def send_bot_message_sync(chat_id, text, reply_to_message_id=None):
-    payload = {"chat_id": chat_id, "text": text[:3900]}
-    if reply_to_message_id:
-        payload["reply_to_message_id"] = reply_to_message_id
-        payload["allow_sending_without_reply"] = True
-    response = requests.post(
-        f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-        json=payload,
-        timeout=20,
-    )
-    if response.status_code >= 400:
-        raise RuntimeError(f"Telegram sendMessage error {response.status_code}: {response.text[:500]}")
-    return response.json()  # возвращаем результат с message_id
+    result = None
+    for index, chunk in enumerate(split_telegram_text(text)):
+        payload = {"chat_id": chat_id, "text": chunk}
+        if reply_to_message_id and index == 0:
+            payload["reply_to_message_id"] = reply_to_message_id
+            payload["allow_sending_without_reply"] = True
+        resp = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json=payload,
+            timeout=20,
+        )
+        if resp.status_code >= 400:
+            raise RuntimeError(f"Telegram sendMessage error {resp.status_code}: {resp.text[:500]}")
+        result = resp.json()
+    return result  # возвращаем результат последнего отправленного куска
+
+async def reply_text_chunks(message, text):
+    for chunk in split_telegram_text(text):
+        await message.reply_text(chunk)
 
 # Маппинг: Telegram message_id уведомления → SaleBot client_id
 # Позволяет ответить на уведомление в зеркале и отправить ответ клиенту в VK
@@ -2682,7 +2727,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_id, user_message)
     if not reply:
         reply = fallback_reply_for_message(user_message)
-    await update.message.reply_text(reply)
+    await reply_text_chunks(update.message, reply)
     attention_reason = human_attention_reason(user_message, reply)
 
     # Пересылаем диалог администратору
@@ -2720,7 +2765,7 @@ async def handle_public_symbol_decode(update: Update, context: ContextTypes.DEFA
 
     if looks_like_symbol_decode_request(user_message):
         reply = generate_symbol_decode_reply(user_message, language="ru")
-        await message.reply_text(reply)
+        await reply_text_chunks(message, reply)
 
         try:
             await context.bot.send_message(
@@ -2786,7 +2831,7 @@ async def handle_decode_command(update: Update, context: ContextTypes.DEFAULT_TY
         flush=True,
     )
     reply = generate_symbol_decode_reply(text, language="ru")
-    await message.reply_text(reply)
+    await reply_text_chunks(message, reply)
 
 from telegram.ext import filters as tg_filters
 
