@@ -899,10 +899,10 @@ def call_gemini(system_prompt, user_message, max_tokens=1024):
         "contents": [{"parts": [{"text": full_prompt}]}],
         "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7},
     }
-    # Пробуем все актуальные модели Gemini по очереди
+    # Пробуем все актуальные модели Gemini по очереди (рабочие первыми)
     models = [
-        ("gemini-2.5-flash-preview-05-20", "v1beta"),
         ("gemini-2.5-flash",               "v1beta"),
+        ("gemini-2.5-flash-preview-05-20", "v1beta"),
         ("gemini-2.0-flash",               "v1beta"),
         ("gemini-2.0-flash-lite",          "v1beta"),
         ("gemini-2.0-flash-001",           "v1beta"),
