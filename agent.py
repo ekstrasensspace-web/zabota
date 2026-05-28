@@ -1569,7 +1569,7 @@ def generate_symbol_decode_reply(user_message, language="auto"):
         "Требования к языку: грамотный русский, никаких ошибок в глаголах (например: поможем, не помогим). "
         "Не повторяй название курса/клуба дважды. Не ставь диагнозы, не обещай исцеление."
     )
-    reply = call_ai(symbol_system, user_message, max_tokens=600)
+    reply = call_ai(symbol_system, user_message, max_tokens=1000)
     if reply:
         return reply
     print(f"AI недоступен, использую локальную расшифровку", flush=True)
