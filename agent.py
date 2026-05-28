@@ -1299,7 +1299,7 @@ def generate_ai_reply(conversation_key, user_message):
 
     full_user = (history_text + f"Клиент: {user_message}").strip()
 
-    reply = call_ai(system, full_user, max_tokens=1024)
+    reply = call_ai(system, full_user, max_tokens=1500)
     if reply:
         conversation_history[conversation_key].append({"role": "assistant", "content": reply})
     return reply  # None если AI не ответил — бот молчит, команда отвечает вручную
