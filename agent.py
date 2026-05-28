@@ -1281,12 +1281,33 @@ def emotional_practice_reply(text):
         "Подскажите, пожалуйста, после какого эфира или практики это началось?"
     )
 
+def path_to_self_reply(text):
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return None
+    markers = (
+        "ищу путь к себе", "найти путь к себе", "путь к себе",
+        "хочу найти себя", "найти себя", "ищу себя",
+        "предназначение", "свой путь", "куда мне идти",
+    )
+    if not any(marker in normalized for marker in markers):
+        return None
+    return (
+        "Это очень важный запрос — когда душа уже чувствует, что пора вернуться к себе и понять своё направление.\n\n"
+        "Для первого шага у нас есть анкета «Выбор пути». Она помогает увидеть, куда сейчас тянет душу и через какие способности вам легче раскрыться:\n"
+        "https://superabilityacademy.com/CHOICE_OF_PATH\n\n"
+        "А если хочется не просто диагностику, а практику для движения к предназначению, можно начать с программы «Начать путь к предназначению» — 9 900 ₽:\n"
+        "https://superabilityacademy.com/way\n\n"
+        "Начните с анкеты — и по результату будет понятнее, какой путь вам ближе."
+    )
+
 def predefined_reply_for_message(text):
     return (
         clarification_reply_for_contact_only(text)
         or access_email_precheck_reply(text)
         or matrix_or_star_civilization_reply(text)
         or emotional_practice_reply(text)
+        or path_to_self_reply(text)
     )
 
 def limit_text(text, max_len):
@@ -1413,7 +1434,7 @@ COLOR_WORDS = (
 
 SYMBOL_WORDS = (
     "волк", "вовк", "птица", "птах", "орел", "орёл", "сова", "лев", "тигр",
-    "дракон", "змея", "кіт", "кот", "кошка", "лошадь", "конь", "олень",
+    "пантера", "леопард", "пума", "дракон", "змея", "кіт", "кот", "кошка", "лошадь", "конь", "олень",
     "собака", "собачка", "пес", "пёс", "медведь", "заяц", "кролик", "лиса",
     "бесконечность", "нескінченність", "знак", "символ", "руна", "ключ",
     "сердце", "серце", "звезда", "зірка", "луна", "місяць", "солнце", "сонце",
@@ -1422,6 +1443,19 @@ SYMBOL_WORDS = (
     "дерево", "цветок", "квітка", "глаз", "око", "врата", "ворота",
     "пирамида", "пирамиды", "анубис", "сфинкс", "число", "цифра", "форма",
     "якорь", "молния", "стрела", "корона", "кольцо", "перо", "крылья",
+    "крыльями", "крылат", "животное", "зверь",
+)
+
+NUMBER_WORDS = (
+    "один", "единица", "единичка", "первый", "первая",
+    "два", "двойка", "второй", "вторая",
+    "три", "тройка", "третий", "третья",
+    "четыре", "четверка", "четвёрка", "четвертый", "четвёртый",
+    "пять", "пятерка", "пятёрка", "пятый", "пятая",
+    "шесть", "шестерка", "шестёрка", "шестой",
+    "семь", "семерка", "семёрка", "седьмой",
+    "восемь", "восьмерка", "восьмёрка", "восьмой",
+    "девять", "девятка", "девятый",
 )
 
 def looks_like_symbol_decode_request(text):
@@ -1429,7 +1463,10 @@ def looks_like_symbol_decode_request(text):
     if len(normalized) > 400:
         return False
     has_color = any(word in normalized for word in COLOR_WORDS)
-    has_number = re.search(r"(^|[^\w])\d{1,2}([^\w]|$)", normalized) is not None
+    has_number = (
+        re.search(r"(^|[^\w])\d{1,2}([^\w]|$)", normalized) is not None
+        or any(word in normalized for word in NUMBER_WORDS)
+    )
     has_symbol = any(word in normalized for word in SYMBOL_WORDS)
     has_separator = "," in normalized or "\n" in text or ";" in normalized
     asks_decode = any(word in normalized for word in ("расшифр", "розшифр", "что значит", "що означає"))
@@ -2008,7 +2045,10 @@ def process_salebot_message(payload, _debug_entry=None):
     print(f"SaleBot PASS all filters: client={client_id} msg={user_message[:80]!r}", flush=True)
     _set_result("🤖 вызван ИИ...")
     user_key = f"salebot:{client_id}"
-    reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
+    if looks_like_symbol_decode_request(user_message):
+        reply = generate_symbol_decode_reply(user_message, language="ru")
+    else:
+        reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
     used_fallback = False
     if not reply:
         print(f"SaleBot SKIP[ai_silent]: client={client_id} msg={user_message[:80]!r}", flush=True)
@@ -2160,7 +2200,10 @@ def process_getcourse_message(payload):
     getcourse_last_answer[client_id] = now
 
     user_key = f"getcourse:{client_id}"
-    reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
+    if looks_like_symbol_decode_request(user_message):
+        reply = generate_symbol_decode_reply(user_message, language="ru")
+    else:
+        reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
     used_fallback = False
     if not reply:
         reply = fallback_reply_for_message(user_message)
@@ -2466,7 +2509,10 @@ def salebot_reply():
             "error": "no_message"
         })
 
-    reply = predefined_reply_for_message(user_message) or generate_ai_reply(f"salebot:{client_id}", user_message)
+    if looks_like_symbol_decode_request(user_message):
+        reply = generate_symbol_decode_reply(user_message, language="ru")
+    else:
+        reply = predefined_reply_for_message(user_message) or generate_ai_reply(f"salebot:{client_id}", user_message)
     used_fallback = False
     if not reply:
         reply = fallback_reply_for_message(user_message)
