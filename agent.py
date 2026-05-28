@@ -862,19 +862,28 @@ def call_groq(system_prompt, user_message, max_tokens=1024):
         "max_tokens": max_tokens,
         "temperature": 0.7,
     }
-    try:
-        resp = requests.post(url, json=body, headers=headers, timeout=30)
-        if resp.status_code == 429:
-            print("Groq 429 rate limit", flush=True)
+    for attempt in range(3):
+        try:
+            resp = requests.post(url, json=body, headers=headers, timeout=30)
+            if resp.status_code == 429:
+                wait = 5 * (attempt + 1)
+                print(f"Groq 429 rate limit (попытка {attempt+1}/3), ждём {wait}с...", flush=True)
+                if attempt < 2:
+                    time.sleep(wait)
+                    continue
+                return None
+            resp.raise_for_status()
+            text = resp.json()["choices"][0]["message"]["content"]
+            _ai_stat_bump("groq")
+            print(f"Groq ответил успешно (попытка {attempt+1})", flush=True)
+            return text
+        except Exception as exc:
+            print(f"Groq error (попытка {attempt+1}): {exc}", flush=True)
+            if attempt < 2:
+                time.sleep(3)
+                continue
             return None
-        resp.raise_for_status()
-        text = resp.json()["choices"][0]["message"]["content"]
-        _ai_stat_bump("groq")
-        print("Groq ответил успешно", flush=True)
-        return text
-    except Exception as exc:
-        print(f"Groq error: {exc}", flush=True)
-        return None
+    return None
 
 
 def call_gemini(system_prompt, user_message, max_tokens=1024):
