@@ -845,16 +845,11 @@ def _ai_stat_bump(provider: str) -> dict:
         _ai_stats[provider] = _ai_stats.get(provider, 0) + 1
         return dict(_ai_stats)
 
-def call_groq(system_prompt, user_message, max_tokens=1024):
-    """Groq API — бесплатно, 14400 запросов/день, очень быстро."""
-    if not GROQ_API_KEY:
-        return None
-    url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    # Groq: без products.txt промпт ~47k chars — влезает в 128k-контекст без обрезания
+def _call_groq_model(model, system_prompt, user_message, max_tokens, headers, url):
+    """Один вызов Groq с заданной моделью, 3 попытки при 429."""
     groq_system = system_prompt[:60000] if len(system_prompt) > 60000 else system_prompt
     body = {
-        "model": "llama-3.3-70b-versatile",
+        "model": model,
         "messages": [
             {"role": "system", "content": groq_system},
             {"role": "user", "content": user_message},
@@ -867,22 +862,41 @@ def call_groq(system_prompt, user_message, max_tokens=1024):
             resp = requests.post(url, json=body, headers=headers, timeout=30)
             if resp.status_code == 429:
                 wait = 5 * (attempt + 1)
-                print(f"Groq 429 rate limit (попытка {attempt+1}/3), ждём {wait}с...", flush=True)
+                print(f"Groq {model} 429 (попытка {attempt+1}/3), ждём {wait}с...", flush=True)
                 if attempt < 2:
                     time.sleep(wait)
                     continue
                 return None
             resp.raise_for_status()
             text = resp.json()["choices"][0]["message"]["content"]
-            _ai_stat_bump("groq")
-            print(f"Groq ответил успешно (попытка {attempt+1})", flush=True)
+            print(f"Groq {model} ответил успешно (попытка {attempt+1})", flush=True)
             return text
         except Exception as exc:
-            print(f"Groq error (попытка {attempt+1}): {exc}", flush=True)
+            print(f"Groq {model} error (попытка {attempt+1}): {exc}", flush=True)
             if attempt < 2:
                 time.sleep(3)
                 continue
             return None
+    return None
+
+
+def call_groq(system_prompt, user_message, max_tokens=1024):
+    """Groq API — llama-3.3-70b (12K TPM), при перегрузке — groq/compound (70K TPM)."""
+    if not GROQ_API_KEY:
+        return None
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    # Основная модель — высокое качество, но 12K токенов в минуту
+    result = _call_groq_model("llama-3.3-70b-versatile", system_prompt, user_message, max_tokens, headers, url)
+    if result:
+        _ai_stat_bump("groq")
+        return result
+    # Фолбек — groq/compound: 70K TPM, выдерживает одновременные запросы
+    print("Groq llama перегружен — пробуем groq/compound...", flush=True)
+    result = _call_groq_model("groq/compound", system_prompt, user_message, max_tokens, headers, url)
+    if result:
+        _ai_stat_bump("groq")
+        return result
     return None
 
 
@@ -1238,11 +1252,55 @@ def matrix_or_star_civilization_reply(text):
         "а сами получать ответы о себе и своём происхождении."
     )
 
+def emotional_practice_reply(text):
+    """Тёплый ответ на сообщения про сильные ощущения от эфира/практики без ожидания AI."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return None
+
+    body_markers = (
+        "в теле", "моем теле", "моём теле", "сердце", "колотится",
+        "ворочается", "двигается", "движется", "трясло", "тряска",
+        "мурашки", "жар", "тепло", "вибрации", "ощущение", "ощущения",
+        "не могу передать словами",
+    )
+    practice_markers = (
+        "голос натальи", "натальи", "руны", "рейки", "практик", "эфир",
+        "посвящение", "инициация", "марафон", "энерг",
+    )
+    if not any(marker in normalized for marker in body_markers):
+        return None
+    if not any(marker in normalized for marker in practice_markers):
+        return None
+
+    return (
+        "Спасибо, что так тонко описали ощущения.\n\n"
+        "Похоже, тело очень сильно откликается на поле Натальи и практику. Такое бывает, когда энергия начинает двигаться глубже: "
+        "может чувствоваться тепло, вибрации, движение в теле, сильное сердцебиение или ощущение, будто символы оживают внутри.\n\n"
+        "Сейчас важно не пугаться: спокойно подышите, выпейте воды, почувствуйте стопы и тело, немного заземлитесь.\n\n"
+        "Подскажите, пожалуйста, после какого эфира или практики это началось?"
+    )
+
 def predefined_reply_for_message(text):
     return (
         clarification_reply_for_contact_only(text)
         or access_email_precheck_reply(text)
         or matrix_or_star_civilization_reply(text)
+        or emotional_practice_reply(text)
+    )
+
+def limit_text(text, max_len):
+    value = str(text or "")
+    if len(value) <= max_len:
+        return value
+    return value[: max_len - 1].rstrip() + "…"
+
+def fallback_reply_for_message(text):
+    """Что отвечаем клиенту, если все AI-провайдеры временно не ответили."""
+    return predefined_reply_for_message(text) or (
+        "Спасибо, я увидела ваше сообщение.\n\n"
+        "Чтобы ответить точно и без ошибки, передам вопрос специалисту Академии. "
+        "Он посмотрит ваш запрос и вернётся с ответом."
     )
 
 def build_human_attention_notice(source, user_name, client_id, user_message, bot_reply, reason, action_text):
@@ -1902,17 +1960,20 @@ def process_salebot_message(payload, _debug_entry=None):
     _set_result("🤖 вызван ИИ...")
     user_key = f"salebot:{client_id}"
     reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
+    used_fallback = False
     if not reply:
         print(f"SaleBot SKIP[ai_silent]: client={client_id} msg={user_message[:80]!r}", flush=True)
-        _set_result("❌ ИИ молчит (нет ответа)")
-        # AI недоступен — уведомляем команду чтобы ответили вручную
+        reply = fallback_reply_for_message(user_message)
+        used_fallback = True
+        _set_result("⚠️ ИИ не ответил, отправляем резервный ответ")
+        # AI недоступен — клиенту отвечаем резервно, команде отдаём полный контекст.
         telegram_notify_sync(
             f"⚠️ AI не ответил (лимит/ошибка)\n"
             f"👤 {user_name} ({client_id}) — VK\n"
-            f"💬 {user_message[:200]}\n\n"
-            f"Ответьте клиенту вручную в SaleBot!"
+            f"💬 Сообщение клиента ({len(user_message)} симв.):\n{limit_text(user_message, 3200)}\n\n"
+            f"Клиенту отправлен резервный ответ:\n{limit_text(reply, 1200)}\n\n"
+            f"Проверьте диалог в SaleBot, если нужен точный ответ специалиста."
         )
-        return
     _set_result(f"📤 отправляем ответ...")
     try:
         send_salebot_message(client_id, reply)
@@ -1928,6 +1989,8 @@ def process_salebot_message(payload, _debug_entry=None):
         schedule_salebot_followup(client_id, user_name, reply)
 
     reason = human_attention_reason(user_message, reply)
+    if used_fallback and not reason:
+        reason = "AI не ответил, клиенту отправлен резервный ответ"
     if reason:
         telegram_notify_sync(build_human_attention_notice(
             "SaleBot",
@@ -1939,7 +2002,7 @@ def process_salebot_message(payload, _debug_entry=None):
             f"Тейковер: откройте клиента в SaleBot и возьмите диалог вручную.\n{salebot_channel_info(payload)}",
         ))
     else:
-        reply_preview = reply[:600] + ("…" if len(reply) > 600 else "")
+        reply_preview = limit_text(reply, 1200)
         msg_id = telegram_notify_sync(
             f"👤 SaleBot — {user_name} ({client_id})\n"
             f"{salebot_channel_info(payload)}:\n{user_message}\n\n"
@@ -2049,7 +2112,13 @@ def process_getcourse_message(payload):
 
     user_key = f"getcourse:{client_id}"
     reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
+    used_fallback = False
+    if not reply:
+        reply = fallback_reply_for_message(user_message)
+        used_fallback = True
     reason = human_attention_reason(user_message, reply)
+    if used_fallback and not reason:
+        reason = "AI не ответил, клиенту отправлен резервный ответ"
     if reason:
         telegram_notify_sync(build_human_attention_notice(
             "GetCourse/VK",
@@ -2349,7 +2418,13 @@ def salebot_reply():
         })
 
     reply = predefined_reply_for_message(user_message) or generate_ai_reply(f"salebot:{client_id}", user_message)
+    used_fallback = False
+    if not reply:
+        reply = fallback_reply_for_message(user_message)
+        used_fallback = True
     reason = human_attention_reason(user_message, reply)
+    if used_fallback and not reason:
+        reason = "AI не ответил, клиенту отправлен резервный ответ"
     if reason:
         telegram_notify_sync(build_human_attention_notice(
             "SaleBot API",
@@ -2605,6 +2680,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = generate_symbol_decode_reply(user_message, language="ru")
     else:
         reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_id, user_message)
+    if not reply:
+        reply = fallback_reply_for_message(user_message)
     await update.message.reply_text(reply)
     attention_reason = human_attention_reason(user_message, reply)
 
