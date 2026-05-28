@@ -1600,7 +1600,11 @@ def generate_symbol_decode_reply(user_message, language="auto"):
         "Требования к языку: грамотный русский, никаких ошибок в глаголах (например: поможем, не помогим). "
         "Не повторяй название курса/клуба дважды. Не ставь диагнозы, не обещай исцеление."
     )
-    reply = call_ai(symbol_system, user_message, max_tokens=1800)
+    # Для массовых расшифровок в комментариях не используем платный Claude:
+    # если бесплатные Groq/Gemini не ответили, ниже берём локальную стабильную расшифровку.
+    reply = call_groq(symbol_system, user_message, max_tokens=1800)
+    if not reply:
+        reply = call_gemini(symbol_system, user_message, max_tokens=1800)
     if reply and not symbol_reply_looks_incomplete(reply):
         return reply
     if reply:
