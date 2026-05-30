@@ -2290,7 +2290,7 @@ def process_salebot_message(payload, _debug_entry=None):
             f"Тейковер: откройте клиента в SaleBot и возьмите диалог вручную.\n{salebot_channel_info(payload)}",
         ))
     else:
-        reply_preview = limit_text(reply, 1200)
+        reply_preview = limit_text(reply, 2500)
         msg_id = telegram_notify_sync(
             f"👤 SaleBot — {user_name} ({client_id})\n"
             f"{salebot_channel_info(payload)}:\n{user_message}\n\n"
