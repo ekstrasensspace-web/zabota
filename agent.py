@@ -2670,6 +2670,58 @@ def admin_panel():
 </html>"""
     return html
 
+@web_app.route("/admin/export")
+def admin_export():
+    """Экспорт диалогов за указанную дату (по умолчанию — вчера) в текстовый файл."""
+    pwd = request.args.get("pwd", "")
+    if pwd != ADMIN_PASSWORD:
+        return "<h2>403 Forbidden</h2>", 403
+
+    import datetime as _dt
+    date_str = request.args.get("date", "")
+    if date_str:
+        try:
+            day = _dt.date.fromisoformat(date_str)
+        except ValueError:
+            return "Неверный формат даты. Используйте YYYY-MM-DD", 400
+    else:
+        day = _dt.date.today() - _dt.timedelta(days=1)
+
+    date_from = f"{day} 00:00:00"
+    date_to   = f"{day} 23:59:59"
+
+    conn = sqlite3.connect(DIALOG_DB)
+    rows = conn.execute(
+        "SELECT ts, source, client_name, client_id, user_message, bot_reply "
+        "FROM dialogs WHERE ts >= ? AND ts <= ? ORDER BY ts ASC",
+        (date_from, date_to)
+    ).fetchall()
+    conn.close()
+
+    if not rows:
+        return f"Диалогов за {day} не найдено.", 200
+
+    lines = [f"=== Диалоги за {day} | всего записей: {len(rows)} ===\n"]
+    prev_client = None
+    for ts, source, name, cid, user_msg, bot_reply in rows:
+        client_label = f"{name} ({cid}) [{source}]"
+        if client_label != prev_client:
+            lines.append(f"\n{'─'*60}")
+            lines.append(f"👤 {client_label}")
+            lines.append(f"{'─'*60}")
+            prev_client = client_label
+        lines.append(f"\n[{ts}]")
+        lines.append(f"КЛИЕНТ: {user_msg}")
+        lines.append(f"БОТ:    {bot_reply}")
+
+    text = "\n".join(lines)
+    from flask import Response
+    return Response(
+        text,
+        mimetype="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=dialogs_{day}.txt"}
+    )
+
 @web_app.route("/salebot/reply", methods=["GET", "POST"])
 @web_app.route("/salebot/reply/", methods=["GET", "POST"])
 def salebot_reply():
