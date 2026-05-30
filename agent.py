@@ -231,28 +231,14 @@ PRICES = """
 ━━━━━━━━━━━━━━━━━━━━━━━
 КЛУБ РОДСТВЕННЫХ ДУШ (подписка)
 ━━━━━━━━━━━━━━━━━━━━━━━
-РУБЛИ (GetCourse): 4 990 ₽/мес, 11 990 ₽/3 мес, 42 000 ₽/год → https://ekstrasensschool.getcourse.ru/buy_club
-Оплата через Telegram-бот: https://t.me/Energomeditacion_bot
+Актуальные тарифы и ссылки. Евро указаны по клубному пересчёту 100 ₽ = 1 €.
+Используй только эти ссылки на оплату Клуба, старые ссылки GetCourse/Thinkific/Stripe/Telegram-бота не давай.
 
-ЕВРО — Thinkific (разовая оплата):
-• Ступень Искра / медитации — 19 € → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4564079
-• Голос — 57 € → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4564917
-• Полный — 114 € → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4564991
-
-ЕВРО — Thinkific (автоплатёж):
-• Искра 19 €/мес → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4721615
-• Голос 57 €/мес → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4721616
-• Полный 114 €/мес → https://course.superabilitiesacademy.com/enroll/3625000?price_id=4721617
-
-ЕВРО — Stripe (разовая):
-• Искра 19 € → https://buy.stripe.com/eVq28t7LO2dKewX8sN2kw08
-• Голос 57 € → https://buy.stripe.com/cNibJ36HKf0wgF5gZj2kw07
-• Полный 114 € → https://buy.stripe.com/14A7sN8PS7y4ewXbEZ2kw0b
-
-Продление Клуба (Thinkific):
-• 30 дней → https://course.superabilitiesacademy.com/enroll/3656877?price_id=4600185
-• 6 месяцев → https://course.superabilitiesacademy.com/enroll/3656877?price_id=4600188
-• 1 год → https://course.superabilitiesacademy.com/enroll/3656877?price_id=4600190
+• I ступень: Искра — 1 990 ₽ / 19,90 € → https://superabilityacademy.com/club_iskra
+• II ступень: Голос — 5 700 ₽ / 57 € → https://superabilityacademy.com/club_voice
+• III ступень: Маяк — 11 400 ₽ / 114 € → https://superabilityacademy.com/club_lighthouse
+• Тариф на полгода — 27 777 ₽ / 277,77 € → https://superabilityacademy.com/club_polgoda
+• Тариф на год — 48 888 ₽ / 488,88 € → https://superabilityacademy.com/club_year
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 ПУТЬ НАЧИНАЮЩЕГО (5 шагов + набор)
@@ -536,7 +522,7 @@ SYSTEM_PROMPT_TEMPLATE = """Ты — консультант отдела заб�
 - Новые трансовые медитации от Натальи каждый месяц
 - Гайды по использованию ИИ и созданию своего канала
 Идеальный клиент Клуба: тот кто уже прошёл курс или хочет расти, применять знания и зарабатывать своим даром
-Годовая подписка (42 000 ₽) — в 1,5 раза выгоднее чем помесячно (4 990 ₽ × 12 = ~60 000 ₽). Годовой участник идёт без остановок.
+Годовая подписка (48 888 ₽) — в 1,5 раза выгоднее чем помесячно (5 700 ₽ × 12 = ~68 000 ₽). Годовой участник идёт без остановок.
 Закрывай примерно так: "Круг Хранителей знаний — это закрытое сообщество, где Наталья лично ведёт каждого в проявленность: еженедельные эфиры, практики в ковенах, медитации и путь к монетизации своего дара. Годовая подписка в 1,5 раза выгоднее помесячной — и даёт ощущение что идёшь всерьёз. Оплата в рублях или в евро?"
 
 КАК ПРОДАВАТЬ МАГИЮ ДРУИДОВ — СПЕЦИАЛЬНЫЕ ПРАВИЛА:
