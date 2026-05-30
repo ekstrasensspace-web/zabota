@@ -1215,28 +1215,70 @@ processed_public_messages = set()
 processed_public_lock = threading.Lock()
 print(f"Известных пользователей: {len(known_users)}")
 
-# === Лог диалогов для админки ===
+# === Лог диалогов — Postgres (постоянное хранение) + SQLite fallback ===
 import sqlite3
+import psycopg2
+import psycopg2.extras
 
-DIALOG_DB = os.path.join(BASE_DIR, "dialogs.db")
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+DIALOG_DB = os.path.join(BASE_DIR, "dialogs.db")  # fallback
+
+def _pg_conn():
+    """Подключение к Postgres."""
+    return psycopg2.connect(DATABASE_URL)
 
 def init_dialog_db():
+    if DATABASE_URL:
+        try:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS dialogs (
+                    id SERIAL PRIMARY KEY,
+                    ts TIMESTAMP DEFAULT NOW(),
+                    source TEXT,
+                    client_id TEXT,
+                    client_name TEXT,
+                    user_message TEXT,
+                    bot_reply TEXT
+                )
+            """)
+            conn.commit()
+            cur.close()
+            conn.close()
+            print("Postgres dialogs table ready", flush=True)
+            return
+        except Exception as e:
+            print(f"Postgres init error, fallback to SQLite: {e}", flush=True)
+    # SQLite fallback
     conn = sqlite3.connect(DIALOG_DB)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS dialogs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ts TEXT DEFAULT (datetime('now','localtime')),
-            source TEXT,
-            client_id TEXT,
-            client_name TEXT,
-            user_message TEXT,
-            bot_reply TEXT
+            source TEXT, client_id TEXT, client_name TEXT,
+            user_message TEXT, bot_reply TEXT
         )
     """)
     conn.commit()
     conn.close()
 
 def log_dialog(source, client_id, client_name, user_message, bot_reply):
+    if DATABASE_URL:
+        try:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO dialogs (source, client_id, client_name, user_message, bot_reply) VALUES (%s,%s,%s,%s,%s)",
+                (source, str(client_id), str(client_name), str(user_message), str(bot_reply))
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+            return
+        except Exception as e:
+            print(f"Postgres log_dialog error: {e}", flush=True)
+    # SQLite fallback
     try:
         conn = sqlite3.connect(DIALOG_DB)
         conn.execute(
@@ -1246,7 +1288,7 @@ def log_dialog(source, client_id, client_name, user_message, bot_reply):
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"dialog_log error: {e}", flush=True)
+        print(f"SQLite log_dialog error: {e}", flush=True)
 
 init_dialog_db()
 
@@ -2555,24 +2597,46 @@ def admin_panel():
     page = max(1, int(request.args.get("page", 1)))
     per_page = 50
 
-    conn = sqlite3.connect(DIALOG_DB)
     where_clauses = []
     params = []
     if source_filter:
-        where_clauses.append("source = ?")
+        where_clauses.append("source = %s" if DATABASE_URL else "source = ?")
         params.append(source_filter)
     if search:
-        where_clauses.append("(client_name LIKE ? OR user_message LIKE ? OR bot_reply LIKE ?)")
+        like_op = "ILIKE" if DATABASE_URL else "LIKE"
+        ph = "%s" if DATABASE_URL else "?"
+        where_clauses.append(f"(client_name {like_op} {ph} OR user_message {like_op} {ph} OR bot_reply {like_op} {ph})")
         params += [f"%{search}%", f"%{search}%", f"%{search}%"]
 
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
-    total = conn.execute(f"SELECT COUNT(*) FROM dialogs {where_sql}", params).fetchone()[0]
-    rows = conn.execute(
-        f"SELECT id, ts, source, client_id, client_name, user_message, bot_reply FROM dialogs {where_sql} ORDER BY id DESC LIMIT ? OFFSET ?",
-        params + [per_page, (page - 1) * per_page]
-    ).fetchall()
-    sources = [r[0] for r in conn.execute("SELECT DISTINCT source FROM dialogs ORDER BY source").fetchall()]
-    conn.close()
+
+    if DATABASE_URL:
+        try:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute(f"SELECT COUNT(*) FROM dialogs {where_sql}", params)
+            total = cur.fetchone()[0]
+            cur.execute(
+                f"SELECT id, ts, source, client_id, client_name, user_message, bot_reply FROM dialogs {where_sql} ORDER BY id DESC LIMIT %s OFFSET %s",
+                params + [per_page, (page - 1) * per_page]
+            )
+            rows = cur.fetchall()
+            cur.execute("SELECT DISTINCT source FROM dialogs ORDER BY source")
+            sources = [r[0] for r in cur.fetchall()]
+            cur.close(); conn.close()
+        except Exception as e:
+            print(f"Postgres admin panel error: {e}", flush=True)
+            total, rows, sources = 0, [], []
+    else:
+        where_sql_sq = where_sql.replace("%s", "?")
+        conn = sqlite3.connect(DIALOG_DB)
+        total = conn.execute(f"SELECT COUNT(*) FROM dialogs {where_sql_sq}", params).fetchone()[0]
+        rows = conn.execute(
+            f"SELECT id, ts, source, client_id, client_name, user_message, bot_reply FROM dialogs {where_sql_sq} ORDER BY id DESC LIMIT ? OFFSET ?",
+            params + [per_page, (page - 1) * per_page]
+        ).fetchall()
+        sources = [r[0] for r in conn.execute("SELECT DISTINCT source FROM dialogs ORDER BY source").fetchall()]
+        conn.close()
 
     total_pages = max(1, (total + per_page - 1) // per_page)
 
@@ -2690,13 +2754,27 @@ def admin_export():
     date_from = f"{day} 00:00:00"
     date_to   = f"{day} 23:59:59"
 
-    conn = sqlite3.connect(DIALOG_DB)
-    rows = conn.execute(
-        "SELECT ts, source, client_name, client_id, user_message, bot_reply "
-        "FROM dialogs WHERE ts >= ? AND ts <= ? ORDER BY ts ASC",
-        (date_from, date_to)
-    ).fetchall()
-    conn.close()
+    if DATABASE_URL:
+        try:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT ts, source, client_name, client_id, user_message, bot_reply "
+                "FROM dialogs WHERE ts >= %s AND ts <= %s ORDER BY ts ASC",
+                (date_from, date_to)
+            )
+            rows = cur.fetchall()
+            cur.close(); conn.close()
+        except Exception as e:
+            return f"Ошибка базы данных: {e}", 500
+    else:
+        conn = sqlite3.connect(DIALOG_DB)
+        rows = conn.execute(
+            "SELECT ts, source, client_name, client_id, user_message, bot_reply "
+            "FROM dialogs WHERE ts >= ? AND ts <= ? ORDER BY ts ASC",
+            (date_from, date_to)
+        ).fetchall()
+        conn.close()
 
     if not rows:
         return f"Диалогов за {day} не найдено.", 200
