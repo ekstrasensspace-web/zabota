@@ -3258,10 +3258,61 @@ async def handle_mirror_reply(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text(f"❌ Ошибка отправки: {e}")
         return
 
+async def cmd_dialogs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/dialogs [YYYY-MM-DD] — скачать диалоги за дату (по умолчанию вчера). Только для админов."""
+    if not (update.effective_user and update.effective_user.id in ADMIN_IDS):
+        return
+    import datetime as _dt
+    from io import BytesIO
+    parts = (update.message.text or "").split()
+    if len(parts) >= 2:
+        try:
+            day = _dt.date.fromisoformat(parts[1].strip())
+        except ValueError:
+            await update.message.reply_text("Неверный формат. Пример: /dialogs 2026-05-30")
+            return
+    else:
+        day = _dt.date.today() - _dt.timedelta(days=1)
+
+    date_from = f"{day} 00:00:00"
+    date_to   = f"{day} 23:59:59"
+
+    conn = sqlite3.connect(DIALOG_DB)
+    rows = conn.execute(
+        "SELECT ts, source, client_name, client_id, user_message, bot_reply "
+        "FROM dialogs WHERE ts >= ? AND ts <= ? ORDER BY ts ASC",
+        (date_from, date_to)
+    ).fetchall()
+    conn.close()
+
+    if not rows:
+        await update.message.reply_text(f"Диалогов за {day} не найдено.")
+        return
+
+    lines = [f"=== Диалоги за {day} | записей: {len(rows)} ===\n"]
+    prev_client = None
+    for ts, source, name, cid, user_msg, bot_reply in rows:
+        label = f"{name} ({cid}) [{source}]"
+        if label != prev_client:
+            lines.append(f"\n{'─'*50}")
+            lines.append(f"👤 {label}")
+            lines.append(f"{'─'*50}")
+            prev_client = label
+        lines.append(f"\n[{ts}]")
+        lines.append(f"КЛИЕНТ: {user_msg}")
+        lines.append(f"БОТ:    {bot_reply}")
+
+    text = "\n".join(lines)
+    buf = BytesIO(text.encode("utf-8"))
+    buf.name = f"dialogs_{day}.txt"
+    await update.message.reply_document(document=buf, filename=f"dialogs_{day}.txt",
+                                        caption=f"📋 Диалоги за {day} ({len(rows)} записей)")
+
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(CommandHandler("start", handle_start))
 app.add_handler(CommandHandler("chatid", handle_chatid))
 app.add_handler(CommandHandler("decode", handle_decode_command))
+app.add_handler(CommandHandler("dialogs", cmd_dialogs))
 app.add_handler(CommandHandler("takeover_sb", cmd_takeover_sb))
 app.add_handler(CommandHandler("release_sb", cmd_release_sb))
 app.add_handler(CommandHandler("takeover", cmd_takeover))
