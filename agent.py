@@ -1192,46 +1192,153 @@ def call_ai(system_prompt, user_message, max_tokens=1024):
 conversation_history = {}
 
 # === Фоллоу-ап: повторный вопрос через 10 минут если клиент не ответил ===
-salebot_followup_timers = {}  # client_id -> threading.Timer
+salebot_followup_timers = {}  # client_id -> threading.Timer (fallback когда нет Postgres)
 
 def cancel_salebot_followup(client_id):
-    """Отменить запланированный фоллоу-ап (клиент ответил)."""
+    """Отменить фоллоу-апы: и в Postgres, и in-memory таймер."""
+    # In-memory fallback
     timer = salebot_followup_timers.pop(client_id, None)
     if timer:
         timer.cancel()
-        print(f"SaleBot followup cancelled for {client_id}", flush=True)
+    # Postgres
+    if DATABASE_URL:
+        try:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE followups SET cancelled=TRUE WHERE client_id=%s AND sent=FALSE AND cancelled=FALSE",
+                (str(client_id),)
+            )
+            rows = cur.rowcount
+            conn.commit()
+            cur.close()
+            conn.close()
+            if rows > 0:
+                print(f"Persistent followups cancelled for {client_id} ({rows})", flush=True)
+        except Exception as e:
+            print(f"Cancel followup DB error: {e}", flush=True)
 
 def schedule_salebot_followup(client_id, user_name, last_question):
-    """Запланировать повторный вопрос через 10 минут в другой формулировке."""
+    """Запланировать 2 фоллоу-апа: через 10 минут и через 24 часа.
+    Сохраняет в Postgres — не теряется при перезапуске Railway."""
+    from datetime import datetime, timedelta
     cancel_salebot_followup(client_id)
 
-    def send_followup():
-        salebot_followup_timers.pop(client_id, None)
-        print(f"SaleBot followup: генерируем переформулировку для {client_id}", flush=True)
-        rephrase_prompt = (
-            "Ты — консультант академии. Клиент не ответил на вопрос. "
-            "Переформулируй вопрос коротко и по-другому, тепло и без давления. "
-            "Только сам вопрос, без лишних слов."
-        )
-        followup = call_ai(rephrase_prompt, f"Исходный вопрос: {last_question}")
-        if not followup:
-            followup = last_question  # если AI не ответил — повторяем оригинал
+    if DATABASE_URL:
+        # Персистентные фоллоу-апы в Postgres
         try:
-            send_salebot_message(client_id, followup)
-            log_dialog("SaleBot", client_id, user_name, "[followup]", followup)
-            telegram_notify_sync(
-                f"⏰ Фоллоу-ап — {user_name} ({client_id})\n"
-                f"🤖 Бот повторил вопрос:\n{followup[:300]}"
-            )
-            print(f"SaleBot followup sent to {client_id}", flush=True)
+            now = datetime.utcnow()
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO followups (client_id, user_name, last_question, stage, scheduled_at)
+                VALUES (%s,%s,%s,1,%s), (%s,%s,%s,2,%s)
+            """, (
+                str(client_id), str(user_name), str(last_question), now + timedelta(minutes=10),
+                str(client_id), str(user_name), str(last_question), now + timedelta(hours=24),
+            ))
+            conn.commit()
+            cur.close()
+            conn.close()
+            print(f"Persistent followups scheduled for {client_id}: 10min + 24h", flush=True)
         except Exception as e:
-            print(f"SaleBot followup send error: {e}", flush=True)
+            print(f"Schedule followup DB error: {e}", flush=True)
+    else:
+        # Fallback: in-memory таймер только на 10 минут
+        def send_followup():
+            salebot_followup_timers.pop(client_id, None)
+            rephrase_prompt = (
+                "Ты — консультант академии. Клиент не ответил на вопрос. "
+                "Переформулируй вопрос коротко и по-другому, тепло и без давления. "
+                "Только сам вопрос, без лишних слов."
+            )
+            followup = call_ai(rephrase_prompt, f"Исходный вопрос: {last_question}")
+            if not followup:
+                followup = last_question
+            try:
+                send_salebot_message(client_id, followup)
+                log_dialog("SaleBot", client_id, user_name, "[followup]", followup)
+                telegram_notify_sync(
+                    f"⏰ Фоллоу-ап (10 мин) — {user_name} ({client_id})\n"
+                    f"🤖 Бот написал:\n{followup[:300]}"
+                )
+            except Exception as e:
+                print(f"SaleBot followup send error: {e}", flush=True)
 
-    timer = threading.Timer(600, send_followup)  # 10 минут
-    timer.daemon = True
-    salebot_followup_timers[client_id] = timer
-    timer.start()
-    print(f"SaleBot followup scheduled for {client_id} in 10 min", flush=True)
+        timer = threading.Timer(600, send_followup)
+        timer.daemon = True
+        salebot_followup_timers[client_id] = timer
+        timer.start()
+        print(f"Fallback followup scheduled for {client_id} in 10 min", flush=True)
+
+def _send_one_followup(fid, client_id, user_name, last_question, stage):
+    """Отправить один фоллоу-ап и пометить sent=TRUE."""
+    try:
+        if stage == 1:
+            prompt = (
+                "Ты — консультант академии. Клиент не ответил на вопрос. "
+                "Переформулируй вопрос коротко и по-другому, тепло и без давления. "
+                "Только сам вопрос, без лишних слов."
+            )
+            text = call_ai(prompt, f"Исходный вопрос: {last_question}")
+            if not text:
+                text = last_question
+            label = "10 мин"
+        else:
+            prompt = (
+                "Ты — консультант академии. Клиент замолчал вчера. "
+                "Напиши тёплое короткое сообщение (1-2 предложения), чтобы мягко вернуть его к разговору. "
+                "Без давления. Намекни что готова помочь определиться. Не упоминай что ты бот."
+            )
+            text = call_ai(prompt, f"Последнее сообщение бота: {last_question}")
+            if not text:
+                text = "Добрый день! Хотела уточнить — вы ещё думаете? Буду рада помочь оформить 😊"
+            label = "24 ч"
+
+        send_salebot_message(client_id, text)
+        log_dialog("SaleBot", client_id, user_name, "[followup]", text)
+        telegram_notify_sync(
+            f"⏰ Фоллоу-ап ({label}) — {user_name} ({client_id})\n"
+            f"🤖 Бот написал:\n{text[:300]}"
+        )
+        print(f"Persistent followup sent (stage={stage}) to {client_id}", flush=True)
+    except Exception as e:
+        print(f"Followup send error id={fid}: {e}", flush=True)
+        return
+
+    # Пометить отправленным
+    try:
+        conn = _pg_conn()
+        cur = conn.cursor()
+        cur.execute("UPDATE followups SET sent=TRUE WHERE id=%s", (fid,))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Followup mark-sent error: {e}", flush=True)
+
+def followup_worker():
+    """Фоновый поток: каждые 60 сек проверяет Postgres на готовые фоллоу-апы."""
+    import time
+    while True:
+        try:
+            if DATABASE_URL:
+                conn = _pg_conn()
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT id, client_id, user_name, last_question, stage
+                    FROM followups
+                    WHERE sent=FALSE AND cancelled=FALSE AND scheduled_at <= NOW()
+                    ORDER BY scheduled_at ASC
+                """)
+                rows = cur.fetchall()
+                cur.close()
+                conn.close()
+                for row in rows:
+                    _send_one_followup(*row)
+        except Exception as e:
+            print(f"Followup worker error: {e}", flush=True)
+        time.sleep(60)
 paused_users = set()        # Telegram-пользователи на ручном управлении
 paused_salebot_clients = set()  # VK/SaleBot-клиенты на ручном управлении
 forwarded_map = {}          # message_id пересланного сообщения → user_id клиента
@@ -1272,10 +1379,23 @@ def init_dialog_db():
                     bot_reply TEXT
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS followups (
+                    id SERIAL PRIMARY KEY,
+                    client_id TEXT NOT NULL,
+                    user_name TEXT,
+                    last_question TEXT,
+                    stage INTEGER DEFAULT 1,
+                    scheduled_at TIMESTAMP NOT NULL,
+                    sent BOOLEAN DEFAULT FALSE,
+                    cancelled BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
             conn.commit()
             cur.close()
             conn.close()
-            print("Postgres dialogs table ready", flush=True)
+            print("Postgres dialogs+followups tables ready", flush=True)
             return
         except Exception as e:
             print(f"Postgres init error, fallback to SQLite: {e}", flush=True)
@@ -3498,6 +3618,7 @@ asyncio.run_coroutine_threadsafe(_init_ptb(), _ptb_loop).result(timeout=30)
 
 threading.Thread(target=run_web_server, daemon=True).start()
 threading.Thread(target=run_telethon_watcher, daemon=True).start()
+threading.Thread(target=followup_worker, daemon=True).start()
 print("Бот запущен (webhook mode)!", flush=True)
 print(f"GEMINI_API_KEY: {'✅ задан (' + GEMINI_API_KEY[:8] + '...)' if GEMINI_API_KEY else '❌ НЕ ЗАДАН — бот будет молчать!'}", flush=True)
 
