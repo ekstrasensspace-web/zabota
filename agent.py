@@ -234,11 +234,11 @@ PRICES = """
 Актуальные тарифы и ссылки. Евро указаны по клубному пересчёту 100 ₽ = 1 €.
 Используй только эти ссылки на оплату Клуба, старые ссылки GetCourse/Thinkific/Stripe/Telegram-бота не давай.
 
-• I ступень: Искра — 1 990 ₽ / 19,90 € → https://superabilityacademy.com/club_iskra
+• I ступень: Медитации — 1 990 ₽ / 19 € → https://superabilityacademy.com/club_iskra
 • II ступень: Голос — 5 700 ₽ / 57 € → https://superabilityacademy.com/club_voice
 • III ступень: Маяк — 11 400 ₽ / 114 € → https://superabilityacademy.com/club_lighthouse
-• Тариф на полгода — 27 777 ₽ / 277,77 € → https://superabilityacademy.com/club_polgoda
-• Тариф на год — 48 888 ₽ / 488,88 € → https://superabilityacademy.com/club_year
+• Полугодовой тариф Голос — 27 777 ₽ / 278 € → https://superabilityacademy.com/club_polgoda
+• Годовой тариф Голос — 48 888 ₽ / 490 € → https://superabilityacademy.com/club_year
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 ПУТЬ НАЧИНАЮЩЕГО (5 шагов + набор)
