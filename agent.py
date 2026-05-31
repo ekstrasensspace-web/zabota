@@ -3118,6 +3118,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not reply:
         reply = fallback_reply_for_message(user_message)
     await reply_text_chunks(update.message, reply)
+    log_dialog("Telegram", user_id, user_name, user_message, reply)
     attention_reason = human_attention_reason(user_message, reply)
 
     # Пересылаем диалог администратору
