@@ -2949,6 +2949,43 @@ def admin_export():
         headers={"Content-Disposition": f"attachment; filename=dialogs_{day}.txt"}
     )
 
+@web_app.route("/admin/send", methods=["GET", "POST"])
+def admin_send():
+    """Отправить сообщение клиенту SaleBot вручную или через AI.
+    GET /admin/send?pwd=mac2024&client_id=5105029277&message=Добрый день!
+    GET /admin/send?pwd=mac2024&client_id=5105029277   ← AI сгенерирует фоллоу-ап
+    """
+    pwd = request.args.get("pwd", "") or (request.get_json(silent=True) or {}).get("pwd", "")
+    if pwd != ADMIN_PASSWORD:
+        return "<h2>403 Forbidden</h2>", 403
+
+    client_id = request.args.get("client_id", "").strip()
+    message = request.args.get("message", "").strip()
+
+    if not client_id:
+        return "<p>Укажите client_id</p>", 400
+
+    if not message:
+        # AI генерирует тёплый фоллоу-ап
+        prompt = (
+            "Ты — консультант академии. Клиент не ответил на последнее сообщение. "
+            "Напиши тёплое короткое сообщение (1-2 предложения), чтобы мягко вернуть его к разговору. "
+            "Без давления. Намекни что готова помочь определиться. Не упоминай что ты бот."
+        )
+        message = call_ai(prompt, "Напиши фоллоу-ап для клиента который замолчал.")
+        if not message:
+            message = "Добрый день! Хотела уточнить — вы ещё думаете? Буду рада помочь оформить 😊"
+
+    try:
+        send_salebot_message(client_id, message)
+        log_dialog("SaleBot", client_id, "admin-send", "[admin followup]", message)
+        telegram_notify_sync(
+            f"📤 Ручной фоллоу-ап → клиент {client_id}\n🤖 Бот написал:\n{message[:300]}"
+        )
+        return f"<p>✅ Отправлено клиенту {client_id}:</p><blockquote>{message}</blockquote>"
+    except Exception as e:
+        return f"<p>❌ Ошибка: {e}</p>", 500
+
 @web_app.route("/salebot/reply", methods=["GET", "POST"])
 @web_app.route("/salebot/reply/", methods=["GET", "POST"])
 def salebot_reply():
@@ -3536,11 +3573,45 @@ async def cmd_dialogs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_document(document=buf, filename=f"dialogs_{day}.txt",
                                         caption=f"📋 Диалоги за {day} ({len(rows)} записей)")
 
+async def cmd_followup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/followup <client_id> [текст] — отправить фоллоу-ап клиенту SaleBot прямо сейчас.
+    Если текст не указан — AI сгенерирует сообщение."""
+    if not (update.effective_user and update.effective_user.id in ADMIN_IDS):
+        return
+    parts = (update.message.text or "").split(maxsplit=2)
+    if len(parts) < 2:
+        await update.message.reply_text("Использование: /followup <client_id> [текст]\nПример: /followup 5105029277")
+        return
+
+    client_id = parts[1].strip()
+    manual_text = parts[2].strip() if len(parts) >= 3 else ""
+
+    if manual_text:
+        message = manual_text
+    else:
+        await update.message.reply_text(f"⏳ Генерирую фоллоу-ап для {client_id}…")
+        prompt = (
+            "Ты — консультант академии. Клиент не ответил на последнее сообщение. "
+            "Напиши тёплое короткое сообщение (1-2 предложения), чтобы мягко вернуть его к разговору. "
+            "Без давления. Намекни что готова помочь определиться. Не упоминай что ты бот."
+        )
+        message = call_ai(prompt, "Напиши фоллоу-ап для клиента который замолчал.")
+        if not message:
+            message = "Добрый день! Хотела уточнить — вы ещё думаете? Буду рада помочь оформить 😊"
+
+    try:
+        send_salebot_message(client_id, message)
+        log_dialog("SaleBot", client_id, "admin-followup", "[admin followup]", message)
+        await update.message.reply_text(f"✅ Отправлено клиенту {client_id}:\n\n{message}")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка отправки: {e}")
+
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(CommandHandler("start", handle_start))
 app.add_handler(CommandHandler("chatid", handle_chatid))
 app.add_handler(CommandHandler("decode", handle_decode_command))
 app.add_handler(CommandHandler("dialogs", cmd_dialogs))
+app.add_handler(CommandHandler("followup", cmd_followup))
 app.add_handler(CommandHandler("takeover_sb", cmd_takeover_sb))
 app.add_handler(CommandHandler("release_sb", cmd_release_sb))
 app.add_handler(CommandHandler("takeover", cmd_takeover))
