@@ -1446,11 +1446,23 @@ init_dialog_db()
 
 web_app = Flask(__name__)
 
+def _normalize_chat_id(chat_id):
+    """Telethon даёт 1752036351, Bot API даёт -1001752036351 — приводим к единому виду."""
+    try:
+        cid = int(str(chat_id).lstrip("-"))
+        # убираем суперgroup-префикс 100 если есть
+        s = str(cid)
+        if s.startswith("100") and len(s) > 10:
+            s = s[3:]
+        return s
+    except Exception:
+        return str(chat_id)
+
 def mark_public_message_processed(chat_id, message_id):
     """Не даём Bot API и Telethon ответить на один комментарий дважды."""
     if not chat_id or not message_id:
         return True
-    key = f"{chat_id}:{message_id}"
+    key = f"{_normalize_chat_id(chat_id)}:{message_id}"
     with processed_public_lock:
         if key in processed_public_messages:
             return False
@@ -2037,15 +2049,26 @@ def looks_like_public_question(text):
     normalized = text.strip()
     if not normalized:
         return False
-    if "?" in normalized:
+    low = normalized.lower()
+    # Прямые коммерческие вопросы — перенаправляем в бот
+    commerce_keywords = (
+        "как оплатить", "как купить", "сколько стоит", "где купить",
+        "как записаться", "как попасть", "как получить доступ",
+        "есть ли скидка", "можно ли купить", "как оформить",
+        "як оплатити", "скільки коштує", "як купити",
+    )
+    if any(kw in low for kw in commerce_keywords):
         return True
+    # Вопрос с ? только если начинается с вопросительного слова (не просто восклицание)
     question_starts = (
         "как ", "когда ", "куда ", "где ", "сколько ", "почему ", "зачем ",
-        "можно ", "подскажите", "скажите", "что делать", "как оплатить",
+        "можно ", "подскажите", "скажите", "что делать",
         "як ", "коли ", "куди ", "де ", "скільки ", "чому ", "можна ",
         "підкажіть", "скажіть", "що робити",
     )
-    return normalized.lower().startswith(question_starts)
+    if "?" in normalized and low.startswith(question_starts):
+        return True
+    return False
 
 def public_question_redirect_reply():
     return (
@@ -3108,6 +3131,9 @@ async def telethon_public_watcher():
         sender = await event.get_sender()
         if getattr(sender, "bot", False):
             return
+        # Не отвечаем на посты администраторов/Натальи
+        if getattr(sender, "id", None) in ADMIN_IDS:
+            return
 
         text = (event.raw_text or "").strip()
         if not text or text.startswith("/"):
@@ -3297,6 +3323,9 @@ async def handle_public_symbol_decode(update: Update, context: ContextTypes.DEFA
     if not message or not chat or not message.text:
         return
     if message.from_user and message.from_user.is_bot:
+        return
+    # Не отвечаем на посты администраторов/Натальи
+    if message.from_user and message.from_user.id in ADMIN_IDS:
         return
 
     print(
