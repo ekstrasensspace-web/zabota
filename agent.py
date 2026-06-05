@@ -923,7 +923,7 @@ if os.path.exists(_KB_FILE):
     print(f"База знаний загружена: {list(_KB_SECTIONS.keys())}")
 
 _KB_KEYWORDS = {
-    "Ченнелинг":    ["ченнелинг", "ченнел", "channeling"],
+    "Ченнелинг":    ["ченнелинг", "ченнел", "ченелинг", "ченеленг", "chaneling", "channeling"],
     "Рейки":        ["рейки", "рэйки", "reiki", "рейк"],
     "Руны":         ["руны", "руна", "рун"],
     "7 лучей":      ["луч", "лучи", "7 луч"],
@@ -2457,14 +2457,6 @@ def process_salebot_message(payload, _debug_entry=None):
         reply = fallback_reply_for_message(user_message)
         used_fallback = True
         _set_result("⚠️ ИИ не ответил, отправляем резервный ответ")
-        # AI недоступен — клиенту отвечаем резервно, команде отдаём полный контекст.
-        telegram_notify_sync(
-            f"⚠️ AI не ответил (лимит/ошибка)\n"
-            f"👤 {user_name} ({client_id}) — VK\n"
-            f"💬 Сообщение клиента ({len(user_message)} симв.):\n{limit_text(user_message, 3200)}\n\n"
-            f"Клиенту отправлен резервный ответ:\n{limit_text(reply, 1200)}\n\n"
-            f"Проверьте диалог в SaleBot, если нужен точный ответ специалиста."
-        )
     _set_result(f"📤 отправляем ответ...")
     try:
         send_salebot_message(client_id, reply)
