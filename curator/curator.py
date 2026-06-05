@@ -9,6 +9,7 @@ Responds when:
   • Commands: /start  /ask <question>
 """
 
+import asyncio
 import logging
 import re
 
@@ -94,32 +95,41 @@ async def _answer(update: Update, question: str) -> None:
     message = update.effective_message
     await update.effective_chat.send_action(ChatAction.TYPING)
 
-    try:
-        chunks = query_knowledge(question)
-        context = "\n\n---\n\n".join(chunks) if chunks else "Релевантные материалы не найдены."
-        system = SYSTEM_PROMPT.format(context=context)
+    chunks = query_knowledge(question)
+    context = "\n\n---\n\n".join(chunks) if chunks else "Релевантные материалы не найдены."
+    system = SYSTEM_PROMPT.format(context=context)
 
-        resp = gemini.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=question,
-            config=types.GenerateContentConfig(
-                system_instruction=system,
-                max_output_tokens=MAX_TOKENS,
-                temperature=0.3,
-            ),
-        )
-        answer = resp.text
-        await message.reply_text(answer, parse_mode="Markdown")
+    answer = None
+    last_exc = None
+    for attempt in range(3):
+        try:
+            resp = gemini.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=question,
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    max_output_tokens=MAX_TOKENS,
+                    temperature=0.3,
+                ),
+            )
+            answer = resp.text
+            break
+        except Exception as exc:
+            last_exc = exc
+            err = str(exc)
+            logger.warning("Gemini attempt %d error: %s", attempt + 1, err)
+            if "503" in err or "unavailable" in err.lower() or "overload" in err.lower():
+                await asyncio.sleep(2 ** attempt)  # 1s, 2s, 4s
+                continue
+            break  # не 503 — смысла повторять нет
 
-    except Exception as exc:
-        logger.error("Gemini error: %s", exc, exc_info=True)
-        # Retry without Markdown if parsing failed
-        if "parse" in str(exc).lower() or "markdown" in str(exc).lower():
-            try:
-                await message.reply_text(answer)
-                return
-            except Exception:
-                pass
+    if answer:
+        try:
+            await message.reply_text(answer, parse_mode="Markdown")
+        except Exception:
+            await message.reply_text(answer)
+    else:
+        logger.error("Gemini final error: %s", last_exc, exc_info=True)
         await message.reply_text("⚠️ Временная ошибка. Попробуй ещё раз.")
 
 
