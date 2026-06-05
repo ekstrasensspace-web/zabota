@@ -1902,6 +1902,19 @@ def looks_like_symbol_decode_request(text):
     normalized = re.sub(r"\s+", " ", text.lower()).strip()
     if len(normalized) > 400:
         return False
+
+    # Исключения — это явно НЕ расшифровка символов, а вопрос по курсу/оплате
+    non_decode_markers = (
+        "проплатил", "оплатил", "купил", "приобрел", "зарегистрировал",
+        "с какого числа", "со скольки", "когда начало", "когда старт",
+        "личный кабинет", "не могу войти", "нет доступа", "не открывается",
+        "как проходит", "самостоятельно", "материал", "матерьал",
+        "обучение", "жду ответа", "благодарю", "спасибо за",
+        "уже оплатил", "уже купил", "уже зарегистрировал",
+    )
+    if any(m in normalized for m in non_decode_markers):
+        return False
+
     has_color = any(word in normalized for word in COLOR_WORDS)
     has_number = (
         re.search(r"(^|[^\w])\d{1,2}([^\w]|$)", normalized) is not None
@@ -1911,7 +1924,8 @@ def looks_like_symbol_decode_request(text):
     has_separator = "," in normalized or "\n" in text or ";" in normalized
     asks_decode = any(word in normalized for word in ("расшифр", "розшифр", "что значит", "що означає"))
     has_decode_labels = any(word in normalized for word in (
-        "цвет", "колір", "число", "числа", "цифра", "символ", "животное", "тварина"
+        "цвет", "колір", "цифра", "символ", "животное", "тварина"
+        # убрали "число" и "числа" — слишком часто встречается в бытовом смысле
     ))
     return (
         (has_color or has_decode_labels)
