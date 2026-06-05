@@ -1771,10 +1771,52 @@ def build_system_prompt(similar=""):
         similar_section="=== ПОХОЖИЕ ДИАЛОГИ ИЗ ПРАКТИКИ ===\n" + similar
     )
 
+def load_history_from_db(conversation_key, limit=10):
+    """Загружаем историю диалога из Postgres если в памяти ничего нет (после рестарта)."""
+    if not DATABASE_URL:
+        return []
+    try:
+        # conversation_key вида "salebot:948330515" или "12345678" (Telegram)
+        parts = conversation_key.split(":", 1)
+        source = parts[0] if len(parts) == 2 else None
+        client_id = parts[1] if len(parts) == 2 else parts[0]
+
+        conn = _pg_conn()
+        cur = conn.cursor()
+        if source:
+            cur.execute(
+                "SELECT user_message, bot_reply FROM dialogs "
+                "WHERE source ILIKE %s AND client_id=%s AND user_message != '[followup]' "
+                "ORDER BY ts DESC LIMIT %s",
+                (f"%{source}%", str(client_id), limit)
+            )
+        else:
+            cur.execute(
+                "SELECT user_message, bot_reply FROM dialogs "
+                "WHERE client_id=%s AND user_message != '[followup]' "
+                "ORDER BY ts DESC LIMIT %s",
+                (str(client_id), limit)
+            )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        # Возвращаем в хронологическом порядке (были DESC)
+        history = []
+        for user_msg, bot_reply in reversed(rows):
+            if user_msg:
+                history.append({"role": "user", "content": user_msg})
+            if bot_reply and bot_reply != "— (бот промолчал) —":
+                history.append({"role": "assistant", "content": bot_reply})
+        return history
+    except Exception as e:
+        print(f"load_history_from_db error: {e}", flush=True)
+        return []
+
 def generate_ai_reply(conversation_key, user_message):
     """Единый мозг бота для Telegram, SaleBot и будущих каналов."""
     if conversation_key not in conversation_history:
-        conversation_history[conversation_key] = []
+        # Восстанавливаем историю из Postgres после рестарта
+        conversation_history[conversation_key] = load_history_from_db(conversation_key)
 
     similar = find_similar(user_message)
     conversation_history[conversation_key].append({"role": "user", "content": user_message})
