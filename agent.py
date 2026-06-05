@@ -2761,6 +2761,20 @@ def salebot_debug():
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "mac2024")
 
+@web_app.route("/admin/ping")
+def admin_ping():
+    """Тест отправки в зеркало (LOG_CHANNEL_ID)."""
+    pwd = request.args.get("pwd", "")
+    if pwd != ADMIN_PASSWORD:
+        return "<h2>403</h2>", 403
+    import requests as _req
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    try:
+        r = _req.post(url, json={"chat_id": LOG_CHANNEL_ID, "text": "🔔 Тест зеркала — бот работает"}, timeout=10)
+        return f"<pre>status={r.status_code}\nLOG_CHANNEL_ID={LOG_CHANNEL_ID}\ntoken_prefix={TELEGRAM_TOKEN[:10]}...\n\n{r.text[:1000]}</pre>"
+    except Exception as e:
+        return f"<pre>ERROR: {e}\nLOG_CHANNEL_ID={LOG_CHANNEL_ID}\ntoken_prefix={TELEGRAM_TOKEN[:10]}...</pre>"
+
 @web_app.route("/admin")
 def admin_panel():
     pwd = request.args.get("pwd", "")
