@@ -3143,7 +3143,12 @@ async def telethon_public_watcher():
         if event.out:
             return
         sender = await event.get_sender()
+        if not sender:
+            return  # анонимный пост канала — нет отправителя
         if getattr(sender, "bot", False):
+            return
+        # user_id=777000 — GroupAnonymousBot (посты канала в группе)
+        if getattr(sender, "id", None) == 777000:
             return
         # Не отвечаем на посты администраторов/Натальи
         if getattr(sender, "id", None) in ADMIN_IDS:
@@ -3336,10 +3341,17 @@ async def handle_public_symbol_decode(update: Update, context: ContextTypes.DEFA
     chat = update.effective_chat
     if not message or not chat or not message.text:
         return
+    # Пропускаем боты
     if message.from_user and message.from_user.is_bot:
         return
+    # Пропускаем посты канала (from_user=None — это автопост канала или анонимный admin)
+    if not message.from_user:
+        return
+    # Пропускаем user_id=777000 (GroupAnonymousBot — анонимные посты канала в группе)
+    if message.from_user.id == 777000:
+        return
     # Не отвечаем на посты администраторов/Натальи
-    if message.from_user and message.from_user.id in ADMIN_IDS:
+    if message.from_user.id in ADMIN_IDS:
         return
 
     print(
