@@ -1,6 +1,6 @@
 """
 Telegram AI Curator Bot
-Stack: python-telegram-bot v21+ + Google Gemini + BM25 RAG
+Stack: python-telegram-bot v21+ + Claude (Anthropic) + BM25 RAG
 
 Responds when:
   • Bot is @mentioned in group chat
@@ -9,13 +9,11 @@ Responds when:
   • Commands: /start  /ask <question>
 """
 
-import asyncio
 import logging
 import re
 
+import anthropic
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import (
@@ -27,8 +25,8 @@ from telegram.ext import (
 )
 
 from config import (
-    GEMINI_API_KEY,
-    GEMINI_MODEL,
+    CLAUDE_API_KEY,
+    CLAUDE_MODEL,
     MAX_TOKENS,
     TELEGRAM_TOKEN,
     TRIGGER_QUESTION_MARK,
@@ -45,7 +43,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-gemini = genai.Client(api_key=GEMINI_API_KEY)
+claude = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
 
 # Russian + English question starters
 _QUESTION_WORDS = {
@@ -95,41 +93,26 @@ async def _answer(update: Update, question: str) -> None:
     message = update.effective_message
     await update.effective_chat.send_action(ChatAction.TYPING)
 
-    chunks = query_knowledge(question)
-    context = "\n\n---\n\n".join(chunks) if chunks else "Релевантные материалы не найдены."
-    system = SYSTEM_PROMPT.format(context=context)
+    try:
+        chunks = query_knowledge(question)
+        context = "\n\n---\n\n".join(chunks) if chunks else "Релевантные материалы не найдены."
+        system = SYSTEM_PROMPT.format(context=context)
 
-    answer = None
-    last_exc = None
-    for attempt in range(3):
-        try:
-            resp = gemini.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=question,
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    max_output_tokens=MAX_TOKENS,
-                    temperature=0.3,
-                ),
-            )
-            answer = resp.text
-            break
-        except Exception as exc:
-            last_exc = exc
-            err = str(exc)
-            logger.warning("Gemini attempt %d error: %s", attempt + 1, err)
-            if "503" in err or "unavailable" in err.lower() or "overload" in err.lower():
-                await asyncio.sleep(2 ** attempt)  # 1s, 2s, 4s
-                continue
-            break  # не 503 — смысла повторять нет
+        resp = claude.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=MAX_TOKENS,
+            system=system,
+            messages=[{"role": "user", "content": question}],
+        )
+        answer = resp.content[0].text
 
-    if answer:
         try:
             await message.reply_text(answer, parse_mode="Markdown")
         except Exception:
             await message.reply_text(answer)
-    else:
-        logger.error("Gemini final error: %s", last_exc, exc_info=True)
+
+    except Exception as exc:
+        logger.error("Claude error: %s", exc, exc_info=True)
         await message.reply_text("⚠️ Временная ошибка. Попробуй ещё раз.")
 
 
@@ -170,13 +153,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     clean = re.sub(re.escape(bot_username), "", text, flags=re.IGNORECASE).strip()
 
     if is_mentioned or is_reply_to_bot:
-        # Упомянули или ответили — всегда отвечаем
         await _answer(update, clean or text)
     elif is_private:
-        # В личном чате — отвечаем на всё
         await _answer(update, text)
     elif _is_question(text) or _is_experience_share(text):
-        # В группе — на вопросы И на поделённый опыт практики
         await _answer(update, text)
 
 
