@@ -6,7 +6,7 @@ TELEGRAM_TOKEN: str = os.getenv("TELEGRAM_TOKEN", "")
 
 # --- Claude (Anthropic) ---
 CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", "")
-CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-3-5-haiku-20241022")
+CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
 MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "1024"))
 
 # --- Knowledge base ---
