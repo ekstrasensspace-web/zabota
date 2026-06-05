@@ -987,7 +987,7 @@ import datetime as _dt
 
 _ai_stats: dict = {"date": None, "groq": 0, "gemini": 0, "claude": 0, "failed": 0}
 _ai_stats_lock = threading.Lock()
-CLAUDE_DAILY_LIMIT = 30  # максимум платных вызовов Claude в сутки (жёсткий стоп)
+CLAUDE_DAILY_LIMIT = 100  # максимум платных вызовов Claude в сутки (поднято пока Gemini не работает)
 
 def _ai_stat_bump(provider: str) -> dict:
     """Считаем вызовы по провайдеру. Сбрасываем счётчик в новые сутки (UTC)."""
@@ -1729,9 +1729,9 @@ def symbol_reply_looks_incomplete(reply):
 def fallback_reply_for_message(text):
     """Что отвечаем клиенту, если все AI-провайдеры временно не ответили."""
     return predefined_reply_for_message(text) or (
-        "Спасибо, я увидела ваше сообщение.\n\n"
-        "Чтобы ответить точно и без ошибки, передам вопрос специалисту Академии. "
-        "Он посмотрит ваш запрос и вернётся с ответом."
+        "Добрый день! Уточните, пожалуйста, чуть подробнее — "
+        "какой именно курс или направление вас интересует? "
+        "Тогда смогу дать точный ответ 😊"
     )
 
 def build_human_attention_notice(source, user_name, client_id, user_message, bot_reply, reason, action_text):
