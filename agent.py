@@ -2256,6 +2256,16 @@ def is_salebot_noise_message(message):
     )
     if any(phrase in normalized for phrase in bot_waiting_phrases):
         return True
+    # Кнопки воронки — нажатие кнопки, а не живой вопрос. Игнорируем всегда.
+    funnel_button_exact = {
+        "зарегистрироваться", "записаться", "подписаться",
+        "старт", "start", "поехали", "продолжить", "далее", "вперёд",
+        "принять", "отмена", "назад",
+        "узнать подробнее", "узнать больше", "получить доступ",
+        "хочу участвовать", "хочу в клуб", "хочу на курс",
+    }
+    if normalized in funnel_button_exact:
+        return True
     if not any(ch.isalnum() for ch in normalized):
         return True
     return False
