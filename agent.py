@@ -1043,7 +1043,7 @@ def should_compact_groq_prompt(system_prompt):
 
 def _call_groq_model(model, system_prompt, user_message, max_tokens, headers, url):
     """Один вызов Groq с заданной моделью, 3 попытки при 429."""
-    groq_system = system_prompt[:28000] if len(system_prompt) > 28000 else system_prompt
+    groq_system = system_prompt[:42000] if len(system_prompt) > 42000 else system_prompt
     body = {
         "model": model,
         "messages": [
