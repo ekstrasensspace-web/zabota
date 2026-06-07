@@ -277,7 +277,8 @@ PRICES = """
 ━━━━━━━━━━━━━━━━━━━━━━━
 • Тайные знания предсказаний — 15 000 ₽ / 150 € → рубли: https://ekstrasensschool.getcourse.ru/ancient_egyptian_divination_practices | евро: https://course.superabilitiesacademy.com/enroll/3407142?price_id=4319409
 • Путь к себе — 9 990 ₽ / 100 € → рубли: https://ekstrasensschool.getcourse.ru/buy_path-to-yourself_sale | евро: https://course.superabilitiesacademy.com/enroll/3410311?price_id=4322888
-• Пробуждение силы рода — 9 999 ₽ / 105 € → ⚠️ ССЫЛКА УТОЧНЯЕТСЯ (НЕ путать с «Шаг 1 — Пробуждение силы» за 490 ₽ — это разные продукты!). Пока ссылки нет — передай специалисту.
+• Пробуждение силы рода — 9 999 ₽ / 105 € → https://ekstrasensschool.getcourse.ru/awakeningpowerbloodline
+  ⚠️ НЕ путать с «Шаг 1 — Пробуждение силы» за 490 ₽ — это РАЗНЫЕ продукты с похожими названиями!
 • Тест «Матрица Звёздной Души» — диагностика/тест, НЕ курс → https://superabilityacademy.com/Star_Matrix
 • Врата Египетских Мистерий — 45 000 ₽ / 500 € → рубли: https://superabilityacademy.com/chenneling_Master | евро: https://course.superabilitiesacademy.com/enroll/3651390?price_id=4594075
 • Начать путь к предназначению — 9 900 ₽ → https://superabilityacademy.com/way
