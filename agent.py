@@ -1480,6 +1480,9 @@ _KB_KEYWORDS = {
     "Предсказания": ["предсказани", "прорицани", "таро", "оракул", "гадани", "предсказыва"],
     "Медитации":    ["медитаци", "медитация", "марафон"],
     "Клуб":         ["клуб", "хранители", "круг хранит"],
+    "Книги":        ["книга", "книгу", "книги", "книге", "белого мага", "белый маг", "звёздные души",
+                     "звездные души", "шишковидн", "путь мага", "основы целительства", "целительств",
+                     "nataliaray", "купить книг", "получить книг", "где купить", "где получить"],
     "Возражения":   ["дорого", "дорог", "подумаю", "подумать", "не готов", "не готова", "нет времени",
                      "нет денег", "не смогу", "не справл", "не уверен", "много работ", "занят",
                      "не сейчас", "позже", "рассрочк", "в рассрочк", "частями", "оплат", "скидк",
@@ -2377,6 +2380,65 @@ def path_to_self_reply(text):
         "Начните с анкеты — и по результату будет понятнее, какой путь вам ближе."
     )
 
+def book_purchase_reply(text):
+    """Прямой запрос на покупку книги — даём ссылку сразу."""
+    normalized = text.lower()
+    book_triggers = ("книгу", "книга", "книге", "купить книг", "получить книг", "как купить", "как получить")
+    book_names = ("белого мага", "белый маг", "звёздные души", "звездные души",
+                  "шишковидн", "путь мага", "целительств", "7 лучей", "семь лучей",
+                  "магия друидов", "магия 7")
+    has_book = any(t in normalized for t in book_triggers)
+    has_name = any(n in normalized for n in book_names)
+    if not (has_book or has_name):
+        return None
+
+    # Подбираем конкретную книгу по названию
+    if "белого мага" in normalized or "белый маг" in normalized or "путь мага" in normalized:
+        return (
+            "Книга «Путь белого мага» — 390 ₽, доступ сразу после оплаты:\n"
+            "nataliaray.com/books/product-1780600391254\n\n"
+            "Все книги Натальи: https://nataliaray.com/catalog"
+        )
+    if "звёздные души" in normalized or "звездные души" in normalized:
+        return (
+            "Книга «Звёздные души» — 390 ₽, доступ сразу после оплаты:\n"
+            "nataliaray.com/books/product-1780614579175\n\n"
+            "Все книги Натальи: https://nataliaray.com/catalog"
+        )
+    if "шишковидн" in normalized:
+        return (
+            "Книга «Секреты шишковидной железы» — 290 ₽, доступ сразу после оплаты:\n"
+            "nataliaray.com/books/secrets-pineal-gland-activation\n\n"
+            "Все книги Натальи: https://nataliaray.com/catalog"
+        )
+    if "целительств" in normalized:
+        return (
+            "Книга «Основы целительства» — 3 900 ₽, доступ сразу после оплаты:\n"
+            "nataliaray.com/books/healing-basics\n\n"
+            "Все книги Натальи: https://nataliaray.com/catalog"
+        )
+    if "7 лучей" in normalized or "семь лучей" in normalized or "магия 7" in normalized:
+        return (
+            "Книга «Магия 7 Лучей» — 2 900 ₽, доступ сразу после оплаты:\n"
+            "nataliaray.com/books/magic-7-rays\n\n"
+            "Все книги Натальи: https://nataliaray.com/catalog"
+        )
+    if "магия друидов" in normalized:
+        return (
+            "Книга «Магия Друидов» — 390 ₽, доступ сразу после оплаты:\n"
+            "nataliaray.com/books/product-1780600447019\n\n"
+            "Все книги Натальи: https://nataliaray.com/catalog"
+        )
+    # Общий запрос про книги
+    if has_book:
+        return (
+            "Все книги Натальи — на сайте nataliaray.com, от 290 ₽.\n"
+            "Доступ сразу после оплаты: https://nataliaray.com/catalog\n\n"
+            "Три главные входные книги: «Магия Друидов», «Путь белого мага», «Звёздные души»."
+        )
+    return None
+
+
 def predefined_reply_for_message(text):
     return (
         devaluation_boundary_reply(text)
@@ -2389,6 +2451,7 @@ def predefined_reply_for_message(text):
         or matrix_or_star_civilization_reply(text)
         or emotional_practice_reply(text)
         or path_to_self_reply(text)
+        or book_purchase_reply(text)
     )
 
 def limit_text(text, max_len):
