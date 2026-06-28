@@ -2588,6 +2588,68 @@ def load_history_from_db(conversation_key, limit=10):
         print(f"load_history_from_db error: {e}", flush=True)
         return []
 
+def sanitize_reply(text):
+    """Пост-обработка ответа AI: удаляем запрещённые фразы, обрезаем длину."""
+    if not text:
+        return text
+
+    import re as _re
+
+    # 1. Сначала специфичные замены (незнание → сайт), потом общие зачистки
+    specific_replacements = [
+        # Незнание → направляем на сайт
+        (r"(?i)(к сожалению,?\s*)?(у меня\s*)?нет информации[^.!?\n]*[.!?]?",
+         "Подробнее — на сайте Академии: https://sverhspobnosti.ru/"),
+        (r"(?i)не (располагаю|имею) информацией[^.!?\n]*[.!?]?",
+         "Подробнее — на сайте Академии: https://sverhspobnosti.ru/"),
+        (r"(?i)не могу найти (эту\s*)?информацию[^.!?\n]*[.!?]?",
+         "Подробнее — на сайте Академии: https://sverhspobnosti.ru/"),
+    ]
+    for pattern, replacement in specific_replacements:
+        text = _re.sub(pattern, replacement, text).strip()
+
+    # 2. Обращение по имени Жрицы — убираем только prefx, остальное оставляем
+    text = _re.sub(r"(?i)^(здравствуйте[,!]?\s*)?(привет[,!]?\s*)?наталь[яе][,!]\s*", "", text).strip()
+    text = _re.sub(r"(?i)^(здравствуйте[,!]?\s*)?(привет[,!]?\s*)?наташа[,!]\s*", "", text).strip()
+
+    # 3. Пресмыкание и извинения — убираем целые фразы
+    noise_patterns = [
+        r"(?i)я (здесь|тут),? (когда|если|чтобы)[^.!?\n]*[.!?]?",
+        r"(?i)рада (помочь|быть здесь|помогать)[^.!?\n]*[.!?]?",
+        r"(?i)готова помочь[^.!?\n]*[.!?]?",
+        r"(?i)всегда (готова|рада)[^.!?\n]*[.!?]?",
+        r"(?i)если (возникнут|появятся) вопросы[^.!?\n]*[.!?]?",
+        r"(?i)напишите в удобное время[^.!?\n]*[.!?]?",
+        r"(?i)обращайтесь в любое время[^.!?\n]*[.!?]?",
+        r"(?i)извините за [^.!?\n]*[.!?]?",
+        r"(?i)простите за [^.!?\n]*[.!?]?",
+        r"(?i)прошу прощения[^.!?\n]*[.!?]?",
+        r"(?i)к сожалению,?\s*",
+    ]
+    for pattern in noise_patterns:
+        text = _re.sub(pattern, "", text).strip()
+
+    # 4. Убираем артефакты после замен
+    text = _re.sub(r" {2,}", " ", text)
+    text = _re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    # 5. Если после всех замен осталось меньше 10 символов — не отправлять
+    if len(text) < 10:
+        return None
+
+    # 6. Лимит длины: 450 символов (600 если есть ссылка)
+    max_len = 600 if "http" in text else 450
+    if len(text) > max_len:
+        cut = text.rfind(".", 0, max_len)
+        if cut < max_len * 0.6:
+            cut = text.rfind("\n", 0, max_len)
+        if cut < max_len * 0.6:
+            cut = max_len
+        text = text[:cut + 1].strip()
+
+    return text
+
+
 def generate_ai_reply(conversation_key, user_message):
     """Единый мозг бота для Telegram, SaleBot и будущих каналов."""
     if conversation_key not in conversation_history:
@@ -2615,6 +2677,7 @@ def generate_ai_reply(conversation_key, user_message):
 
     reply = call_ai(system, full_user, max_tokens=1500)
     if reply:
+        reply = sanitize_reply(reply)
         conversation_history[conversation_key].append({"role": "assistant", "content": reply})
     return reply  # None если AI не ответил — бот молчит, команда отвечает вручную
 
