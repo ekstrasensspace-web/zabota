@@ -3104,6 +3104,31 @@ def looks_like_explicit_client_request(message):
     )
     return any(marker in normalized for marker in course_name_markers)
 
+def is_crm_automation_tag(message):
+    """Определяет системные теги SaleBot/GetCourse — не сообщения клиента, молчим."""
+    if not message:
+        return False
+    stripped = re.sub(r"\s+", "", message.lower())  # убираем пробелы для сравнения
+    # Теги автоворонки: слитные строки без пробелов из служебных слов
+    tag_prefixes = (
+        "автомарафон", "регмарафон", "марафонрег", "вебинаррег",
+        "регкурс", "курсрег", "автокурс", "воронка",
+        "автоматика", "тегклиент", "статусклиент",
+        "utm_", "source=", "medium=", "campaign=",
+    )
+    if any(stripped.startswith(p) for p in tag_prefixes):
+        return True
+    # Короткая слитная строка (без пробелов) из латиницы/кириллицы — системный тег
+    original_stripped = message.strip()
+    if " " not in original_stripped and len(original_stripped) < 60:
+        # Содержит характерные кусочки тегов
+        tag_markers = ("марафон", "marathon", "курс", "course", "рейки", "руны", "reiki",
+                       "рег", "авто", "воронк", "подписк", "триггер")
+        if any(m in original_stripped.lower() for m in tag_markers):
+            return True
+    return False
+
+
 def is_raw_telegram_payload(message):
     """Определяет что 'message_id' это сырой Telegram/SaleBot JSON-объект, а не текст клиента."""
     if not message:
@@ -3163,6 +3188,9 @@ def is_passive_funnel_message(message):
     """
     normalized = re.sub(r"\s+", " ", (message or "").lower()).strip()
     if not normalized:
+        return True
+    # Системный тег CRM/автоворонки — молчим
+    if is_crm_automation_tag(message):
         return True
     # Сырой Telegram payload — молчим
     if is_raw_telegram_payload(message):
