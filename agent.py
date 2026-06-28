@@ -2636,12 +2636,12 @@ def sanitize_reply(text):
     text = _re.sub(r"\n{3,}", "\n\n", text).strip()
 
     # 5. Фильтр мета-инструкций — бот иногда выводит свои же правила как текст
-    meta_markers = (
+    meta_silence_markers = (
         "[молчание", "[не продолжать", "[диалог закрыт", "[тишина",
         "[закрыть диалог", "[бот молчит", "[без ответа",
         "молчание. не продолжать", "диалог закрыт.",
     )
-    if any(m in text.lower() for m in meta_markers):
+    if any(m in text.lower() for m in meta_silence_markers):
         return None
 
     # 6. Если после всех замен осталось меньше 10 символов — не отправлять
@@ -2689,7 +2689,19 @@ def generate_ai_reply(conversation_key, user_message):
     reply = call_ai(system, full_user, max_tokens=1500)
     if reply:
         reply = sanitize_reply(reply)
-        conversation_history[conversation_key].append({"role": "assistant", "content": reply})
+        if reply is None:
+            # AI хотел промолчать — проверяем: был ли вопрос про инфо/курс?
+            info_question_markers = (
+                "детали", "курс", "стоит", "цена", "расписание", "программ",
+                "рейки", "руны", "друид", "ченнелинг", "лучей", "медитац",
+                "обучени", "что входит", "что даёт", "расскажи", "расскажите",
+                "как попасть", "как записаться", "где узнать",
+            )
+            q = user_message.lower()
+            if any(m in q for m in info_question_markers):
+                reply = "Подробнее о курсах и программах — на сайте Академии: https://sverhspobnosti.ru/"
+        if reply:
+            conversation_history[conversation_key].append({"role": "assistant", "content": reply})
     return reply  # None если AI не ответил — бот молчит, команда отвечает вручную
 
 COLOR_WORDS = (
