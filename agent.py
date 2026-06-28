@@ -3104,6 +3104,26 @@ def looks_like_explicit_client_request(message):
     )
     return any(marker in normalized for marker in course_name_markers)
 
+def is_raw_telegram_payload(message):
+    """Определяет что 'message_id' это сырой Telegram/SaleBot JSON-объект, а не текст клиента."""
+    if not message:
+        return False
+    stripped = message.strip()
+    # Выглядит как Python dict или JSON объект
+    if not (stripped.startswith("{") or stripped.startswith("{'") or stripped.startswith('{"')):
+        return False
+    # Содержит технические поля Telegram
+    tech_markers = (
+        "message_id", "file_id", "file_unique_id", "mime_type",
+        "file_size", "is_bot", "language_code", "first_name",
+        "audio", "voice", "video", "document", "sticker",
+        "photo", "animation", "video_note",
+    )
+    normalized = message.lower()
+    matches = sum(1 for m in tech_markers if m in normalized)
+    return matches >= 3  # 3+ технических поля = точно payload
+
+
 def is_advertising_spam(message):
     """Определяет рекламный спам — молчим, не отвечаем."""
     if not message:
@@ -3144,7 +3164,10 @@ def is_passive_funnel_message(message):
     normalized = re.sub(r"\s+", " ", (message or "").lower()).strip()
     if not normalized:
         return True
-    # Рекламный спам — всегда молчим
+    # Сырой Telegram payload — молчим
+    if is_raw_telegram_payload(message):
+        return True
+    # Рекламный спам — молчим
     if is_advertising_spam(message):
         return True
     # Явный запрос клиента — отвечаем
