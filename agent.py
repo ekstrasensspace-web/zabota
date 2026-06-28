@@ -3104,6 +3104,37 @@ def looks_like_explicit_client_request(message):
     )
     return any(marker in normalized for marker in course_name_markers)
 
+def is_advertising_spam(message):
+    """Определяет рекламный спам — молчим, не отвечаем."""
+    if not message:
+        return False
+    normalized = message.lower()
+    # UTM-метки в тексте = реклама чужого продукта
+    if "utm_source" in normalized or "utm_campaign" in normalized or "utm_medium" in normalized:
+        return True
+    # Длинное сообщение (>600 символов) со ссылкой на чужой сайт
+    known_domains = ("superabilityacademy.com", "ekstrasensschool", "getcourse", "t.me/mac_academy",
+                     "psychic_abilities", "nataliaray.com", "superability.chatium")
+    if len(message) > 600:
+        has_external_link = ("http" in normalized or "vk.ru" in normalized or "vk.com" in normalized)
+        is_academy_link = any(d in normalized for d in known_domains)
+        if has_external_link and not is_academy_link:
+            return True
+    # Явные маркеры чужой рекламы
+    spam_markers = (
+        "минздрав", "мінздрав", "без химии", "без хімії",
+        "бесплатный интенсив", "бесплатный онлайн-интенсив",
+        "прямых эфира", "прямых эфиров",
+        "su jok", "су джок", "сужок",
+        "vk.ru/club", "vk.com/club",
+        "мест всего", "участие бесплатное",
+        "подписывайтесь на группу интенсива",
+    )
+    if any(m in normalized for m in spam_markers):
+        return True
+    return False
+
+
 def is_passive_funnel_message(message):
     """Не отвечаем ни на что, кроме явных вопросов/запросов клиента.
 
@@ -3112,6 +3143,9 @@ def is_passive_funnel_message(message):
     """
     normalized = re.sub(r"\s+", " ", (message or "").lower()).strip()
     if not normalized:
+        return True
+    # Рекламный спам — всегда молчим
+    if is_advertising_spam(message):
         return True
     # Явный запрос клиента — отвечаем
     if looks_like_explicit_client_request(message):
