@@ -3273,6 +3273,44 @@ def is_advertising_spam(message):
     return False
 
 
+def is_video_link_only(text):
+    """Сообщение — только ссылка на видео (YouTube, VK, TikTok, etc.). Молчим."""
+    if not text:
+        return False
+    stripped = text.strip()
+    video_url_markers = (
+        "youtube.com/watch", "youtube.com/shorts", "youtube.com/live",
+        "youtu.be/",
+        "vk.com/video", "vkvideo.ru",
+        "rutube.ru/video",
+        "tiktok.com/", "vm.tiktok.com",
+        "instagram.com/reel", "instagram.com/tv/",
+        "ok.ru/video",
+    )
+    if not any(d in stripped.lower() for d in video_url_markers):
+        return False
+    # Убираем ссылки и смотрим есть ли осмысленный текст
+    words = stripped.split()
+    meaningful = [w for w in words if not w.startswith("http") and not w.startswith("www") and len(w) > 3]
+    return len(meaningful) == 0
+
+
+def is_meaningless_text(text):
+    """Технический или бессмысленный текст — цифры, телефоны, одни символы."""
+    if not text:
+        return True
+    stripped = text.strip()
+    if not stripped:
+        return True
+    # Только цифры / телефонный номер
+    if re.fullmatch(r'[\d\s\+\-\(\)\.]{4,}', stripped):
+        return True
+    # Нет ни одного буквенно-цифрового символа
+    if not any(c.isalnum() for c in stripped):
+        return True
+    return False
+
+
 def is_passive_funnel_message(message):
     """Не отвечаем ни на что, кроме явных вопросов/запросов клиента.
 
@@ -3290,6 +3328,12 @@ def is_passive_funnel_message(message):
         return True
     # Рекламный спам — молчим
     if is_advertising_spam(message):
+        return True
+    # Видео-ссылки — молчим
+    if is_video_link_only(message):
+        return True
+    # Бессмысленный/технический текст — молчим
+    if is_meaningless_text(message):
         return True
     # Явный запрос клиента — отвечаем
     if looks_like_explicit_client_request(message):
@@ -4379,6 +4423,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Обычный режим — отвечает бот
+    # Фильтруем: видео, видео-ссылки, бессмысленный текст — молчим
+    if not user_message:
+        return  # видео/фото/стикер без подписи
+    if is_video_link_only(user_message):
+        print(f"TG SKIP[video_link]: user={user_id} msg={user_message[:80]!r}", flush=True)
+        return
+    tg_key = str(user_id)
+    has_tg_history = bool(conversation_history.get(tg_key))
+    if not has_tg_history and is_meaningless_text(user_message):
+        print(f"TG SKIP[meaningless]: user={user_id} msg={user_message[:80]!r}", flush=True)
+        return
     # Сначала проверяем на расшифровку символов (цвет + цифра + символ)
     if looks_like_symbol_decode_request(user_message):
         reply = generate_symbol_decode_reply(user_message, language="ru")
