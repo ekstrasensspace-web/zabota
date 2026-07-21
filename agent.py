@@ -1857,10 +1857,15 @@ def _send_one_followup(fid, client_id, user_name, last_question, stage):
             )
             text = call_ai(prompt, f"Последнее сообщение бота: {last_question}")
             if not text:
-                text = "Добрый день! Хотела уточнить — вы ещё думаете? Буду рада помочь оформить 😊"
+                text = "Добрый день! Хотела уточнить — вы ещё думаете насчёт курса?"
             label = "24 ч"
 
-        send_salebot_message(client_id, text)
+        resp = send_salebot_message(client_id, text)
+        # Если клиент отписался / заблокировал — отменяем все его followup-ы
+        if resp is not None and hasattr(resp, 'status_code') and resp.status_code in (403, 404, 410):
+            print(f"Followup SKIP[unsubscribed]: client={client_id} status={resp.status_code}", flush=True)
+            cancel_salebot_followup(client_id)
+            return
         log_dialog("SaleBot", client_id, user_name, "[followup]", text)
         telegram_notify_sync(
             f"⏰ Фоллоу-ап ({label}) — {user_name} ({client_id})\n"
@@ -1868,7 +1873,12 @@ def _send_one_followup(fid, client_id, user_name, last_question, stage):
         )
         print(f"Persistent followup sent (stage={stage}) to {client_id}", flush=True)
     except Exception as e:
-        print(f"Followup send error id={fid}: {e}", flush=True)
+        err_str = str(e).lower()
+        if any(w in err_str for w in ("forbidden", "unsubscribed", "blocked", "not found", "410", "403")):
+            print(f"Followup SKIP[blocked]: client={client_id} err={e}", flush=True)
+            cancel_salebot_followup(client_id)
+        else:
+            print(f"Followup send error id={fid}: {e}", flush=True)
         return
 
     # Пометить отправленным
@@ -2642,6 +2652,31 @@ def sanitize_reply(text):
         "молчание. не продолжать", "диалог закрыт.",
     )
     if any(m in text.lower() for m in meta_silence_markers):
+        return None
+
+    # 5b. AI не должен сам генерировать "Позиция жертвы" — только хардкод free_only_boundary_reply
+    # Если AI сгенерировал этот текст — блокируем (он срабатывает неправильно по контексту диалога)
+    ai_forbidden_phrases = (
+        "позиция жертвы противоположна",
+        "позицию жертвы, а не мага",
+        "вы выбираете позицию",
+        "в таком настрое вы нам не подходите",
+    )
+    if any(p in text.lower() for p in ai_forbidden_phrases):
+        return None
+
+    # 5c. AI иногда генерирует "разборы" ошибок вместо ответа клиенту — блокируем
+    meta_analysis_markers = (
+        "консультант совершил",
+        "разбор диалога",
+        "критическая ошибка",
+        "ошибка бота",
+        "ошибок на протяжении диалога",
+        "## разбор",
+        "**критическая ошибка**",
+        "рассмотрим ошибки",
+    )
+    if any(m in text.lower() for m in meta_analysis_markers):
         return None
 
     # 6. Если после всех замен осталось меньше 10 символов — не отправлять
