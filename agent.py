@@ -510,7 +510,7 @@ SYSTEM_PROMPT_TEMPLATE = """БЛОК 1 — ЯДРО
 5. Технический вопрос = решить и закрыть. Не продавай тому кто пишет про сбой, доступ, ссылку. Реши проблему — точка.
 
 6. Не знаешь ответа = направь на сайт. Не придумывай. Одна фраза:
-«Подробнее — на сайте Академии: https://sverhspobnosti.ru/ или https://nataliaray.com/»
+«Подробнее — на сайте Академии: https://sverhspobnosti.ru/ или https://superabilitiesacademy.com/ или https://superabilitiesacademy.com/»
 Никогда не говори «не знаю», «нет информации», «не могу найти». Всегда есть куда направить.
 
 7. Нецелевой = закрыть коротко. Спам, реклама, странные сообщения, обесценивание, давление на жалость — один ответ и всё. Не продолжай диалог.
@@ -1027,7 +1027,7 @@ Telegram заблокирован, нет VPN →
 - Если клиент спрашивает про срок доступа — отвечай: "Доступ к материалам открывается на 6 месяцев с момента старта потока."
 
 ЕСЛИ НЕ ЗНАЕШЬ ОТВЕТА:
-- Направь на сайт: «Подробнее — на сайте Академии: https://sverhspobnosti.ru/ или https://nataliaray.com/»
+- Направь на сайт: «Подробнее — на сайте Академии: https://sverhspobnosti.ru/ или https://superabilitiesacademy.com/ или https://superabilitiesacademy.com/»
 - Никогда не говори «не знаю», «нет информации», «не могу найти». Это разрушает доверие.
 - НЕ обещай "вернусь к вам" — бот не может написать первым.
 - НИКОГДА не подтверждай факты которых не знаешь. Если клиент спрашивает про домашнее задание от «Валерия», про конкретный урок или упоминание на эфире — НЕ говори «да, действительно упоминалось».
@@ -2638,11 +2638,11 @@ def sanitize_reply(text):
     specific_replacements = [
         # Незнание → направляем на сайт
         (r"(?i)(к сожалению,?\s*)?(у меня\s*)?нет информации[^.!?\n]*[.!?]?",
-         "Подробнее — на сайте Академии: https://sverhspobnosti.ru/"),
+         "Подробнее — на сайте Академии: https://sverhspobnosti.ru/ или https://superabilitiesacademy.com/"),
         (r"(?i)не (располагаю|имею) информацией[^.!?\n]*[.!?]?",
-         "Подробнее — на сайте Академии: https://sverhspobnosti.ru/"),
+         "Подробнее — на сайте Академии: https://sverhspobnosti.ru/ или https://superabilitiesacademy.com/"),
         (r"(?i)не могу найти (эту\s*)?информацию[^.!?\n]*[.!?]?",
-         "Подробнее — на сайте Академии: https://sverhspobnosti.ru/"),
+         "Подробнее — на сайте Академии: https://sverhspobnosti.ru/ или https://superabilitiesacademy.com/"),
     ]
     for pattern, replacement in specific_replacements:
         text = _re.sub(pattern, replacement, text).strip()
@@ -2752,16 +2752,23 @@ def generate_ai_reply(conversation_key, user_message):
     if reply:
         reply = sanitize_reply(reply)
         if reply is None:
-            # AI хотел промолчать — проверяем: был ли вопрос про инфо/курс?
-            info_question_markers = (
-                "детали", "курс", "стоит", "цена", "расписание", "программ",
+            # AI хотел промолчать — если был хоть какой-то вопрос → на сайт
+            q = user_message.lower()
+            site_fallback_markers = (
+                "детали", "курс", "стоит", "цена", "стоимость", "расписание", "программ",
                 "рейки", "руны", "друид", "ченнелинг", "лучей", "медитац",
                 "обучени", "что входит", "что даёт", "расскажи", "расскажите",
-                "как попасть", "как записаться", "где узнать",
+                "как попасть", "как записаться", "где узнать", "где посмотреть",
+                "способност", "дар", "талант", "тест", "анкет",
+                "что это", "что за", "как ", "когда ", "где ", "кто ", "сколько",
+                "есть ли", "можно ли", "интересует", "хочу узнать",
+                "не работает", "не открывается", "ошибка", "не могу",
             )
-            q = user_message.lower()
-            if any(m in q for m in info_question_markers):
-                reply = "Подробнее о курсах и программах — на сайте Академии: https://sverhspobnosti.ru/"
+            if any(m in q for m in site_fallback_markers) or "?" in user_message:
+                reply = (
+                    "Подробности — на сайте Академии:\n"
+                    "https://sverhspobnosti.ru/ или https://superabilitiesacademy.com/"
+                )
         if reply:
             conversation_history[conversation_key].append({"role": "assistant", "content": reply})
     return reply  # None если AI не ответил — бот молчит, команда отвечает вручную
