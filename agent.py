@@ -2458,6 +2458,32 @@ def book_purchase_reply(text):
     return None
 
 
+def ability_test_reply(text):
+    """Клиент спрашивает есть ли у него способности/дар → анкета, не платный продукт."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return None
+    markers = (
+        "есть ли у меня способност", "есть ли способност",
+        "есть ли у меня дар", "есть ли дар",
+        "хочу узнать свои способност", "узнать свои способност",
+        "узнать есть ли у меня способност",
+        "как узнать свои способност", "как узнать есть ли",
+        "определить свои способност", "какие у меня способност",
+        "есть ли у меня талант", "узнать мои способност",
+        "я способна", "есть ли способности у меня",
+        "какой у меня дар", "как понять мои способност",
+    )
+    if not any(m in normalized for m in markers):
+        return None
+    return (
+        "Чтобы понять, какие способности у вас развиты — пройдите анкету «Выбор Пути». "
+        "За несколько вопросов она покажет к какому направлению вас тянет больше всего:\n"
+        "https://superabilityacademy.com/CHOICE_OF_PATH\n\n"
+        "Или если интересен конкретный курс — есть отдельные анкеты по каждому направлению."
+    )
+
+
 def predefined_reply_for_message(text):
     return (
         devaluation_boundary_reply(text)
@@ -2467,6 +2493,7 @@ def predefined_reply_for_message(text):
         or free_only_boundary_reply(text)
         or clarification_reply_for_contact_only(text)
         or access_email_precheck_reply(text)
+        or ability_test_reply(text)
         or matrix_or_star_civilization_reply(text)
         or emotional_practice_reply(text)
         or path_to_self_reply(text)
@@ -3122,8 +3149,17 @@ def is_salebot_noise_message(message):
         "client_group_leave",
         "button_was_pressed",
         "event_was_fired",
+        "client_unsubscribed",
+        "user_unsubscribed",
+        "client_subscribed",
+        "user_subscribed",
+        "client_blocked",
     )
     if any(normalized.startswith(p) for p in system_prefixes):
+        return True
+    # Также если сообщение точно совпадает с системным событием
+    if normalized in ("client_unsubscribed", "user_unsubscribed", "client_subscribed",
+                      "user_subscribed", "client_blocked", "client_group_join"):
         return True
     bot_waiting_phrases = (
         "жду тебя",
@@ -3145,11 +3181,12 @@ def is_salebot_noise_message(message):
     funnel_button_exact = {
         "зарегистрироваться", "записаться", "подписаться",
         "старт", "start", "поехали", "продолжить", "далее", "вперёд",
+        "начать", "начать!", "go", "го",
         "принять", "отмена", "назад",
         "узнать подробнее", "узнать больше", "получить доступ",
         "хочу участвовать", "хочу в клуб", "хочу на курс",
     }
-    if normalized in funnel_button_exact:
+    if normalized.rstrip("!.,") in funnel_button_exact or normalized in funnel_button_exact:
         return True
     if not any(ch.isalnum() for ch in normalized):
         return True
@@ -3246,14 +3283,28 @@ def is_crm_automation_tag(message):
     )
     if any(stripped.startswith(p) for p in tag_prefixes):
         return True
-    # Короткая слитная строка (без пробелов) из латиницы/кириллицы — системный тег
+    # Слитная строка (без пробелов) — системный тег
     original_stripped = message.strip()
-    if " " not in original_stripped and len(original_stripped) < 60:
-        # Содержит характерные кусочки тегов
-        tag_markers = ("марафон", "marathon", "курс", "course", "рейки", "руны", "reiki",
-                       "рег", "авто", "воронк", "подписк", "триггер")
-        if any(m in original_stripped.lower() for m in tag_markers):
+    if " " not in original_stripped:
+        low = original_stripped.lower()
+        # Системные события как одно слово
+        system_words = ("client_unsubscribed", "user_unsubscribed", "client_subscribed",
+                        "user_subscribed", "client_blocked")
+        if low in system_words:
             return True
+        if len(original_stripped) < 80:
+            # Стандартные маркеры тегов
+            tag_markers = ("марафон", "marathon", "курс", "course", "рейки", "руны", "reiki",
+                           "рег", "авто", "воронк", "подписк", "триггер")
+            if any(m in low for m in tag_markers):
+                return True
+            # Слитные слова из тем курсов — только если строка длиннее 14 символов
+            # (одиночное "ченнелинг" может быть живым ответом клиента)
+            if len(original_stripped) > 14:
+                topic_markers = ("ченнелинг", "ченел", "способност", "друид", "египет",
+                                 "целительств", "архитектор", "проводник", "unsubscribed")
+                if any(m in low for m in topic_markers):
+                    return True
     return False
 
 
