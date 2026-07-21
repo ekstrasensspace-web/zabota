@@ -1922,6 +1922,7 @@ processed_salebot_events = set()
 salebot_last_answer = {}
 processed_getcourse_events = set()
 getcourse_last_answer = {}
+_boundary_closed_clients = set()  # клиенты, которым уже отправлен финальный отказ — молчим
 processed_public_messages = set()
 processed_public_lock = threading.Lock()
 print(f"Известных пользователей: {len(known_users)}")
@@ -2456,6 +2457,17 @@ def book_purchase_reply(text):
             "Три главные входные книги: «Магия Друидов», «Путь белого мага», «Звёздные души»."
         )
     return None
+
+
+def is_final_boundary_reply(text):
+    """Это финальный отказ-отшивание? После него молчим навсегда."""
+    if not text:
+        return False
+    t = text.lower()
+    return (
+        "позиция жертвы" in t
+        or "в таком настрое вы нам не подходите" in t
+    )
 
 
 def ability_test_reply(text):
@@ -3570,6 +3582,13 @@ def process_salebot_message(payload, _debug_entry=None):
         _set_result("⏸️ ручное управление")
         return
 
+    # Клиент уже получил финальный отказ — молчим, не повторяем
+    client_key_sb = f"salebot:{client_id}"
+    if client_key_sb in _boundary_closed_clients:
+        print(f"SaleBot SKIP[boundary_closed]: client={client_id}", flush=True)
+        _set_result("⛔ финально закрыт (уже получил отказ)")
+        return
+
     if not client_id or not user_message:
         print(f"SaleBot SKIP[no_id_or_msg]: Payload={payload}", flush=True)
         _set_result("⛔ нет ID или текста")
@@ -3671,6 +3690,13 @@ def process_salebot_message(payload, _debug_entry=None):
         return
     log_dialog("SaleBot", client_id, user_name, user_message, reply)
     _set_result(f"✅ ответ отправлен: {reply[:80]}")
+
+    # Финальный отказ — запоминаем, больше не отвечаем этому клиенту
+    if is_final_boundary_reply(reply):
+        _boundary_closed_clients.add(f"salebot:{client_id}")
+        cancel_salebot_followup(client_id)
+        print(f"SaleBot BOUNDARY_CLOSED: client={client_id}", flush=True)
+        return
 
     # Если бот задал вопрос — через 10 минут напомнить если клиент не ответит
     if "?" in reply:
@@ -4515,6 +4541,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await notify_admin(context, user_id, user_name, user_message, bot_reply=None)
         return
 
+    # Клиент уже получил финальный отказ — молчим
+    tg_key = str(user_id)
+    if tg_key in _boundary_closed_clients:
+        print(f"TG SKIP[boundary_closed]: user={user_id}", flush=True)
+        return
+
     # Обычный режим — отвечает бот
     # Фильтруем: видео, видео-ссылки, бессмысленный текст — молчим
     if not user_message:
@@ -4522,7 +4554,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_video_link_only(user_message):
         print(f"TG SKIP[video_link]: user={user_id} msg={user_message[:80]!r}", flush=True)
         return
-    tg_key = str(user_id)
     has_tg_history = bool(conversation_history.get(tg_key))
     if not has_tg_history and is_meaningless_text(user_message):
         print(f"TG SKIP[meaningless]: user={user_id} msg={user_message[:80]!r}", flush=True)
@@ -4536,6 +4567,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply = fallback_reply_for_message(user_message)
     await reply_text_chunks(update.message, reply)
     log_dialog("Telegram", user_id, user_name, user_message, reply)
+
+    # Если отправлен финальный отказ — помечаем клиента
+    if reply and is_final_boundary_reply(reply):
+        _boundary_closed_clients.add(tg_key)
+        print(f"TG BOUNDARY_CLOSED: user={user_id}", flush=True)
+
     attention_reason = human_attention_reason(user_message, reply)
 
     # Пересылаем диалог администратору
