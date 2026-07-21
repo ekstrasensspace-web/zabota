@@ -302,6 +302,14 @@ PRICES = """
 • Начать путь к предназначению — 9 900 ₽ → https://superabilityacademy.com/way
 • Коды Изобилия → https://course.superabilitiesacademy.com/enroll/3410377?price_id=4322960
 • Щит Света: защита и сила → https://superabilityacademy.com/Shchit_Sveta
+• Магия Ангелов — курс для практикующих специалистов: система работы с 72 ангелами (консультирование, соединение, исцеление).
+  3 варианта участия:
+  - Ступень I «Консультант» — 45 000 ₽ (карта, расчёт, консультация)
+  - Полная система I+II+III — 140 000 ₽ (скидка со 165 000 ₽)
+  - VIP с личным сопровождением автора — 220 000 ₽
+  Можно оплатить частями. После заявки свяжутся и помогут выбрать ступень.
+  Лендинг: https://superabilitiesacademy.com/angelmagic
+  ⚠️ Курс для тех, кто уже работает с людьми — НЕ для новичков.
 """
 
 # ============================================================
@@ -901,6 +909,7 @@ Telegram заблокирован, нет VPN →
   Матрица Звёздной Души (тест) → https://superabilityacademy.com/Star_Matrix
   Тайные знания предсказаний → https://ekstrasensschool.getcourse.ru/ancient_egyptian_divination_practices
   Путь к себе → https://ekstrasensschool.getcourse.ru/buy_path-to-yourself_sale
+  Магия Ангелов → https://superabilitiesacademy.com/angelmagic
 
 АНКЕТЫ (отправлять как первый шаг когда клиент хочет «тест», «понять свой путь», «узнать способности»):
   Выбор Пути (общая, если не знает что хочет) → https://superabilityacademy.com/CHOICE_OF_PATH
