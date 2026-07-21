@@ -2496,6 +2496,33 @@ def ability_test_reply(text):
     )
 
 
+def strange_test_answers_reply(text):
+    """Клиент проходит тест (Матрица / анкета) и видит "странные" варианты ответов → объясняем что так и надо."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return None
+    strange_markers = (
+        "странные варианты", "странные слова", "странные ответы",
+        "непонятные варианты", "непонятные слова", "непонятные ответы",
+        "необычные варианты", "так должно быть", "так и должно быть",
+        "странные вопросы", "выходят странные", "появляются странные",
+    )
+    test_markers = (
+        "опрос", "тест", "анкет", "матриц", "прохожу", "прохождени",
+        "выходят", "появляются", "варианты ответов", "варианты слов",
+    )
+    has_strange = any(m in normalized for m in strange_markers)
+    has_test = any(m in normalized for m in test_markers)
+    if not (has_strange or (has_test and ("странн" in normalized or "непонятн" in normalized or "необычн" in normalized))):
+        return None
+    return (
+        "Да, так и должно быть! Тест «Матрица Звёздной Души» специально использует образные и символические варианты ответов — "
+        "необычные слова и фразы это часть его метода.\n\n"
+        "Просто выбирайте тот вариант, который откликается больше всего интуитивно, не пытаясь его «расшифровать» или найти «правильный» ответ. "
+        "Тест работает именно через интуитивный выбор — это его сила."
+    )
+
+
 def predefined_reply_for_message(text):
     return (
         devaluation_boundary_reply(text)
@@ -2507,6 +2534,7 @@ def predefined_reply_for_message(text):
         or access_email_precheck_reply(text)
         or ability_test_reply(text)
         or matrix_or_star_civilization_reply(text)
+        or strange_test_answers_reply(text)
         or emotional_practice_reply(text)
         or path_to_self_reply(text)
         or book_purchase_reply(text)
@@ -2716,6 +2744,10 @@ def sanitize_reply(text):
         "рассмотрим ошибки",
     )
     if any(m in text.lower() for m in meta_analysis_markers):
+        return None
+
+    # 5d. Китайские/японские/корейские символы в русском тексте = мусор модели → блокируем
+    if _re.search('[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u30ff\uac00-\ud7af]', text):
         return None
 
     # 6. Если после всех замен осталось меньше 10 символов — не отправлять
