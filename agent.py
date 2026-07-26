@@ -2535,26 +2535,9 @@ def strange_test_answers_reply(text):
     )
 
 
-def standalone_gratitude_reply(text):
-    """Одиночное 'Спасибо'/'Благодарю' без вопроса → тёплый короткий ответ, без продажи."""
-    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
-    if not normalized or len(normalized) > 50 or "?" in normalized:
-        return None
-    stripped = normalized.rstrip("!., 🙏")
-    gratitude_words = (
-        "спасибо", "спс", "благодарю", "благодарю вас", "спасибо вам",
-        "ок спасибо", "окей спасибо", "ok спасибо", "благодаря",
-        "дякую", "дякую вам",  # украинские варианты
-    )
-    if any(stripped == g.rstrip("!., 🙏") for g in gratitude_words):
-        return "Пожалуйста! Если появятся вопросы — пишите 🌹"
-    return None
-
-
 def predefined_reply_for_message(text):
     return (
-        standalone_gratitude_reply(text)
-        or devaluation_boundary_reply(text)
+        devaluation_boundary_reply(text)
         or refund_boundary_reply(text)
         or attention_drain_reply(text)
         or entry_marathon_reply(text)
@@ -3267,6 +3250,18 @@ def is_salebot_noise_message(message):
         "хочу участвовать", "хочу в клуб", "хочу на курс",
     }
     if normalized.rstrip("!.,") in funnel_button_exact or normalized in funnel_button_exact:
+        return True
+    # Одиночная благодарность/прощание — закрывающее сообщение, не запрос. Молчим.
+    farewell_exact = {
+        "спасибо", "спс", "благодарю", "благодарю вас", "спасибо вам",
+        "ok спасибо", "ок спасибо", "окей спасибо", "хорошо спасибо",
+        "всего доброго", "удачи", "до свидания", "пока", "bye",
+        "дякую", "дякую вам", "дякую велике",
+        "понятно спасибо", "поняла спасибо", "понял спасибо",
+        "ок", "окей", "хорошо", "понятно", "поняла", "понял",
+        "принято", "ясно", "ладно", "договорились",
+    }
+    if normalized.rstrip("!., 🙏") in farewell_exact or normalized.rstrip("!., 🙏") in {f.rstrip("!., 🙏") for f in farewell_exact}:
         return True
     if not any(ch.isalnum() for ch in normalized):
         return True
