@@ -2535,9 +2535,26 @@ def strange_test_answers_reply(text):
     )
 
 
+def standalone_gratitude_reply(text):
+    """Одиночное 'Спасибо'/'Благодарю' без вопроса → тёплый короткий ответ, без продажи."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized or len(normalized) > 50 or "?" in normalized:
+        return None
+    stripped = normalized.rstrip("!., 🙏")
+    gratitude_words = (
+        "спасибо", "спс", "благодарю", "благодарю вас", "спасибо вам",
+        "ок спасибо", "окей спасибо", "ok спасибо", "благодаря",
+        "дякую", "дякую вам",  # украинские варианты
+    )
+    if any(stripped == g.rstrip("!., 🙏") for g in gratitude_words):
+        return "Пожалуйста! Если появятся вопросы — пишите 🌹"
+    return None
+
+
 def predefined_reply_for_message(text):
     return (
-        devaluation_boundary_reply(text)
+        standalone_gratitude_reply(text)
+        or devaluation_boundary_reply(text)
         or refund_boundary_reply(text)
         or attention_drain_reply(text)
         or entry_marathon_reply(text)
@@ -3343,6 +3360,9 @@ def is_crm_automation_tag(message):
         "регкурс", "курсрег", "автокурс", "воронка",
         "автоматика", "тегклиент", "статусклиент",
         "utm_", "source=", "medium=", "campaign=",
+        # латинские транслитерации автоворонки
+        "avtoveb", "avtomarafon", "avtovoronka", "avtokurs",
+        "regmarafon", "regkurs", "voronka",
     )
     if any(stripped.startswith(p) for p in tag_prefixes):
         return True
@@ -3356,16 +3376,18 @@ def is_crm_automation_tag(message):
         if low in system_words:
             return True
         if len(original_stripped) < 80:
-            # Стандартные маркеры тегов
+            # Стандартные маркеры тегов (кириллица и латиница)
             tag_markers = ("марафон", "marathon", "курс", "course", "рейки", "руны", "reiki",
-                           "рег", "авто", "воронк", "подписк", "триггер")
+                           "рег", "авто", "avto", "voronk", "воронк", "подписк", "триггер",
+                           "runy", "runes", "veb", "web", "reg_", "_reg", "avto_", "_avto")
             if any(m in low for m in tag_markers):
                 return True
             # Слитные слова из тем курсов — только если строка длиннее 14 символов
             # (одиночное "ченнелинг" может быть живым ответом клиента)
             if len(original_stripped) > 14:
                 topic_markers = ("ченнелинг", "ченел", "способност", "друид", "египет",
-                                 "целительств", "архитектор", "проводник", "unsubscribed")
+                                 "целительств", "архитектор", "проводник", "unsubscribed",
+                                 "chenneling", "channeling", "druid", "egypt", "reiki")
                 if any(m in low for m in topic_markers):
                     return True
     return False
@@ -3445,7 +3467,7 @@ def is_video_link_only(text):
 
 
 def is_meaningless_text(text):
-    """Технический или бессмысленный текст — цифры, телефоны, одни символы."""
+    """Технический или бессмысленный текст — цифры, телефоны, одни символы, email."""
     if not text:
         return True
     stripped = text.strip()
@@ -3456,6 +3478,9 @@ def is_meaningless_text(text):
         return True
     # Нет ни одного буквенно-цифрового символа
     if not any(c.isalnum() for c in stripped):
+        return True
+    # Email-адрес сам по себе — клиент прислал почту как данные, не вопрос
+    if re.fullmatch(r'[\w.+\-]+@[\w\-]+\.[\w.\-]+', stripped):
         return True
     return False
 
