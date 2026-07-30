@@ -51,6 +51,12 @@ STREAM_RECORDINGS = """
 Если клиент спрашивает про любой марафон или запись — сразу давай ссылку: @psychic_abilities
 НЕ задавай уточняющих вопросов про записи — все там.
 
+=== МЕДИТАЦИИ ИЗ РАССЫЛОК ===
+Медитации, которые Наталья анонсирует в рассылках (например, медитация Оленьей Луны), выкладываются ТОЛЬКО в канале «Хранители предзапись»: @channelingMAC.
+Ни на почту, ни в PDF, ни в личку, ни на другие платформы они не выдаются — это условие подарка.
+Если у клиента не открывается ссылка из рассылки на медитацию — направляй в канал напрямую: @channelingMAC. Если Telegram не работает — посоветуй VPN.
+НЕ советуй проверять почту и папку Спам — рассылка была в Telegram, почта ни при чём.
+
 === БЕСПЛАТНЫЙ МАРАФОН «7 ЛУЧЕЙ» ===
 
 Марафон «7 Лучей» — это 4 бесплатных вебинара, которые доступны в канале @psychic_abilities.
@@ -608,6 +614,14 @@ SYSTEM_PROMPT_TEMPLATE = """БЛОК 1 — ЯДРО
 
 ЗАПРЕЩЕНО — никогда не генерируй «Послание от Высшего Я», «Послание от Вашего Высшего Я», «Послание от Ангела» и любые ченнелинговые послания в ответ на сообщение клиента. Если клиент спрашивает цену, расписание, формат или условия — отвечай конкретно из базы знаний. «Послание» — это ответ на другой запрос (прямой запрос на послание), не на вопрос о курсе.
 
+БЕСПЛАТНОЕ — НА УСЛОВИЯХ АКАДЕМИИ (важный принцип):
+Бесплатные материалы (книги, медитации, марафоны, записи) — это подарки. Академия сама выбирает, где и как их выдавать — обычно в своих Telegram-каналах.
+Клиент не может требовать выдать подарок другим способом: «пришлите на почту», «в PDF», «в личку», «в Одноклассники». Персональная доставка — это уже обслуживание, оно есть только на платных продуктах.
+Как отвечать — вежливо, без оправданий, один раз:
+«Бесплатные материалы доступны там, где Академия их публикует — это условие подарка. Если Telegram не открывается, поможет VPN.»
+Если клиент продолжает настаивать или возмущаться: «Условия одинаковы для всех. Всего доброго 🙏» — и тишина.
+НИКОГДА не обещай для бесплатных материалов: «отправлю повторно», «свяжусь с техподдержкой», «подождите, я найду решение», «отправлю в текстовом формате». Это невыполнимые обещания.
+
 ПАТТЕРН «ТРЕБОВАНИЕ + УКОЛ»:
 Когда клиент сначала попрощался, потом вернулся с требованием бесплатного И при этом добавил что-то обесценивающее ("сама вы не очень", "ваши сотрудники не отвечают", "разочарована в вас"):
 Это манипуляция. Цель — получить что-то через давление или вину.
@@ -1116,6 +1130,13 @@ nataliaray.com/books/product-1780614579175
 Секреты шишковидной железы — 290 ₽
 Самая доступная точка входа. Ясновидение, видения, тонкие планы.
 nataliaray.com/books/secrets-pineal-gland-activation
+
+ПРАВИЛО ПРО БЕСПЛАТНЫЕ КНИГИ (важно — частая претензия):
+Некоторые книги Наталья дарит бесплатно — но ТОЛЬКО в закрепе Telegram-канала @psychic_abilities и только на условиях акции.
+Бесплатная версия не высылается на почту, не отправляется в PDF, не выдаётся в личке — никогда и никому.
+Если клиент говорит «Наталья обещала книгу бесплатно» — отвечай спокойно и уверенно:
+«Да, книга бесплатна — она в закрепе Telegram-канала @psychic_abilities, забрать можно там. Это условия подарка: только через канал. На почту и в личку книги не высылаются. Если хотите книгу отдельно, без канала — это платная версия: nataliaray.com/catalog»
+НЕ оправдывайся, НЕ отправляй на платную ссылку без объяснения, НЕ закрывай диалог фразами про «настрой» — просто объясни условия.
 
 Магия 7 Лучей — 2 900 ₽
 Для тех кто уже в теме и хочет глубокую методику. Не для новеньких.
@@ -2162,6 +2183,14 @@ def devaluation_boundary_reply(text):
     if not any(marker in normalized for marker in markers):
         return None
 
+    # Не закрываем диалог если "обман/мошенничество" — про техническую проблему
+    # ("браузер пишет мошеннический сайт", "ссылка ведёт на подозрительный сайт")
+    # или про условия бесплатного продукта ("обещали книгу бесплатно") — это жалобы, не обесценивание
+    tech_context = ("сайт", "ссылк", "браузер", "открыва", "перейти", "пишет",
+                    "выдает", "выдаёт", "книг", "бесплатн", "оплатил", "доступ")
+    if any(t in normalized for t in tech_context):
+        return None
+
     return (
         "В таком настрое вы нам не подходите.\n\n"
         "Обучение у Натальи строится на доверии к мастеру, уважении к пути и готовности вкладываться в своё развитие. "
@@ -2537,9 +2566,35 @@ def strange_test_answers_reply(text):
     )
 
 
+def meditation_link_reply(text):
+    """Ссылка на медитацию из рассылки не открывается → канал «Хранители предзапись»."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return None
+    if "медитац" not in normalized and "олень" not in normalized:
+        return None
+    link_problem = "ссылк" in normalized and any(
+        m in normalized for m in ("не откр", "не работает", "не перейти", "не дает", "не даёт", "не получается", "не пускает")
+    )
+    wants_where = any(
+        m in normalized
+        for m in ("где послушать", "где прослушать", "как послушать", "как прослушать",
+                  "где найти медитац", "где медитац", "где скачать медитац", "пришлите медитац",
+                  "отправьте медитац", "вышлите медитац")
+    )
+    if not (link_problem or wants_where):
+        return None
+    return (
+        "Медитация выложена в канале «Хранители предзапись»: @channelingMAC — слушать можно только там, "
+        "в другом виде она не выдаётся, это условие подарка.\n\n"
+        "Если ссылка из рассылки не открывается — зайдите в канал напрямую: @channelingMAC. "
+        "Если Telegram у вас не работает, поможет VPN."
+    )
+
 def predefined_reply_for_message(text):
     return (
         devaluation_boundary_reply(text)
+        or meditation_link_reply(text)
         or refund_boundary_reply(text)
         or attention_drain_reply(text)
         or entry_marathon_reply(text)
@@ -2725,6 +2780,13 @@ def sanitize_reply(text):
     # 4. Убираем артефакты после замен
     text = _re.sub(r" {2,}", " ", text)
     text = _re.sub(r"\n{3,}", "\n\n", text).strip()
+    # Обрывок "Я " перед словом с большой буквы — след вырезанной фразы ("Я Чтобы получить...")
+    text = _re.sub(r"^Я\s+(?=[А-ЯЁ])", "", text).strip()
+    # Интро "Я Роза, помощница Академии." перед обрывком с маленькой буквы — склейка, убираем
+    text = _re.sub(r"(?i)^(здравствуйте[!,.]?\s*)?я роза, помощниц[аеы] академии[.!]?\s*(?=[а-яё])", "", text).strip()
+    # Если после чисток текст начинается с маленькой буквы — поднимаем первую букву
+    if text and text[0].islower():
+        text = text[0].upper() + text[1:]
 
     # 5. Фильтр мета-инструкций — бот иногда выводит свои же правила как текст
     meta_silence_markers = (
@@ -2769,6 +2831,10 @@ def sanitize_reply(text):
     if _re.search('[\u4e00-\u9fff\u3400-\u4dbf\u3040-\u30ff\uac00-\ud7af]', text):
         return None
 
+    # 5d2. Латиница с диакритикой (tìm, ệ, ả...) в русском тексте = мусор модели → блокируем
+    if _re.search('[\u00c0-\u024f\u1e00-\u1eff]', text):
+        return None
+
     # 5e. Ответ полностью на английском = ошибка модели, аудитория русскоязычная → блокируем
     latin_words = _re.findall(r'[a-zA-Z]{4,}', text)
     total_words = len(_re.findall(r'\S+', text))
@@ -2786,8 +2852,14 @@ def sanitize_reply(text):
         if cut < max_len * 0.6:
             cut = text.rfind("\n", 0, max_len)
         if cut < max_len * 0.6:
+            cut = text.rfind(" ", 0, max_len)  # хотя бы по границе слова, не посреди
+        if cut < max_len * 0.6:
             cut = max_len
         text = text[:cut + 1].strip()
+        # Если обрезка оставила огрызок ссылки ("...узнать здесь: https://") — убираем его
+        m = _re.search(r"https?://\S*$", text)
+        if m and not _re.match(r"https?://[\w.\-]+\.[a-z]{2,}", m.group(0)):
+            text = text[:m.start()].rstrip(" ,:;—-–").strip()
 
     return text
 
@@ -2841,6 +2913,67 @@ def generate_ai_reply(conversation_key, user_message):
         if reply:
             conversation_history[conversation_key].append({"role": "assistant", "content": reply})
     return reply  # None если AI не ответил — бот молчит, команда отвечает вручную
+
+
+EMAIL_CONFIRM_REPLY = (
+    "Спасибо! Передала ваш email на проверку доступа. "
+    "Если ответ не придёт в течение дня — напишите в @mac_academy, там разберут вручную 🙏"
+)
+REPEAT_ESCALATION_REPLY = (
+    "Вижу, что стандартные шаги не помогли. "
+    "Напишите, пожалуйста, в @mac_academy — там разберут ваш случай вручную 🙏"
+)
+
+def _last_bot_reply(conversation_key):
+    history = conversation_history.get(conversation_key) or []
+    for msg in reversed(history):
+        if msg.get("role") == "assistant":
+            return msg.get("content") or ""
+    return ""
+
+def client_sent_requested_email(conversation_key, user_message):
+    """Клиент прислал голый email после того как бот его попросил — это ответ, а не шум."""
+    if not re.fullmatch(r"[\w.+\-]+@[\w\-]+\.[\w.\-]+", (user_message or "").strip()):
+        return False
+    last_bot = _last_bot_reply(conversation_key).lower()
+    return "email" in last_bot or "почт" in last_bot or "e-mail" in last_bot
+
+def smart_reply(conversation_key, user_message):
+    """Обёртка над predefined + AI: анти-повтор шаблонов и подтверждение полученного email.
+
+    Хардкодные ответы записываются в историю диалога, чтобы AI видел контекст
+    и чтобы один и тот же шаблон не отправлялся клиенту дважды подряд.
+    """
+    def _remember(reply):
+        conversation_history.setdefault(conversation_key, []).append({"role": "user", "content": user_message})
+        conversation_history[conversation_key].append({"role": "assistant", "content": reply})
+        if len(conversation_history[conversation_key]) > 20:
+            conversation_history[conversation_key] = conversation_history[conversation_key][-20:]
+        return reply
+
+    # Клиент прислал email который мы просили → подтверждаем, не гоняем шаблон по кругу
+    if client_sent_requested_email(conversation_key, user_message):
+        return _remember(EMAIL_CONFIRM_REPLY)
+
+    predefined = predefined_reply_for_message(user_message)
+    if predefined:
+        history = conversation_history.get(conversation_key) or []
+        sent_before = any(
+            m.get("role") == "assistant" and m.get("content") == predefined
+            for m in history
+        )
+        if sent_before:
+            # Этот шаблон уже отправляли в этом диалоге — не повторяем
+            already_escalated = any(
+                m.get("role") == "assistant" and m.get("content") == REPEAT_ESCALATION_REPLY
+                for m in history
+            )
+            if already_escalated:
+                return generate_ai_reply(conversation_key, user_message)
+            return _remember(REPEAT_ESCALATION_REPLY)
+        return _remember(predefined)
+
+    return generate_ai_reply(conversation_key, user_message)
 
 COLOR_WORDS = (
     "красный", "красная", "красного", "красные", "червоний", "червона",
@@ -3710,7 +3843,7 @@ def process_salebot_message(payload, _debug_entry=None):
         print(f"SaleBot SKIP[comment]: client={client_id} msg={user_message[:80]!r}", flush=True)
         _set_result("⛔ комментарий")
         return
-    if is_salebot_noise_message(user_message):
+    if is_salebot_noise_message(user_message) and not client_sent_requested_email(f"salebot:{client_id}", user_message):
         print(f"SaleBot SKIP[noise]: client={client_id} msg={user_message[:80]!r}", flush=True)
         _set_result("⛔ шум")
         return
@@ -3739,7 +3872,7 @@ def process_salebot_message(payload, _debug_entry=None):
     if looks_like_symbol_decode_request(user_message):
         reply = generate_symbol_decode_reply(user_message, language="ru")
     else:
-        reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
+        reply = smart_reply(user_key, user_message)
     used_fallback = False
     if not reply:
         reply = fallback_reply_for_message(user_message)
@@ -3888,7 +4021,7 @@ def process_getcourse_message(payload):
         processed_getcourse_events.add(event_key)
         if len(processed_getcourse_events) > 1000:
             processed_getcourse_events.clear()
-    if is_salebot_noise_message(user_message):
+    if is_salebot_noise_message(user_message) and not client_sent_requested_email(f"getcourse:{client_id}", user_message):
         print(f"GetCourse noise ignored for client {client_id}: {user_message[:120]}", flush=True)
         return None
     if is_passive_funnel_message(user_message):
@@ -3905,7 +4038,7 @@ def process_getcourse_message(payload):
     if looks_like_symbol_decode_request(user_message):
         reply = generate_symbol_decode_reply(user_message, language="ru")
     else:
-        reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_key, user_message)
+        reply = smart_reply(user_key, user_message)
     used_fallback = False
     if not reply:
         reply = fallback_reply_for_message(user_message)
@@ -4353,7 +4486,7 @@ def salebot_reply():
     if looks_like_symbol_decode_request(user_message):
         reply = generate_symbol_decode_reply(user_message, language="ru")
     else:
-        reply = predefined_reply_for_message(user_message) or generate_ai_reply(f"salebot:{client_id}", user_message)
+        reply = smart_reply(f"salebot:{client_id}", user_message)
     used_fallback = False
     if not reply:
         reply = fallback_reply_for_message(user_message)
@@ -4639,7 +4772,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if looks_like_symbol_decode_request(user_message):
         reply = generate_symbol_decode_reply(user_message, language="ru")
     else:
-        reply = predefined_reply_for_message(user_message) or generate_ai_reply(user_id, user_message)
+        reply = smart_reply(user_id, user_message)
     if not reply:
         reply = fallback_reply_for_message(user_message)
     await reply_text_chunks(update.message, reply)
