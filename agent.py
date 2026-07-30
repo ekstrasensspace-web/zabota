@@ -3683,7 +3683,9 @@ def is_salebot_noise_message(message):
         "ок", "окей", "хорошо", "понятно", "поняла", "понял",
         "принято", "ясно", "ладно", "договорились",
     }
-    if normalized.rstrip("!., 🙏") in farewell_exact or normalized.rstrip("!., 🙏") in {f.rstrip("!., 🙏") for f in farewell_exact}:
+    # Счищаем ВСЕ эмодзи и знаки (❤️🙏😊!.,) — остаётся только текст
+    stripped_farewell = re.sub(r"[^a-zа-яёіїє0-9]+", " ", normalized).strip()
+    if stripped_farewell in farewell_exact:
         return True
     if not any(ch.isalnum() for ch in normalized):
         return True
