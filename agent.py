@@ -2049,7 +2049,209 @@ def log_dialog(source, client_id, client_name, user_message, bot_reply):
     except Exception as e:
         print(f"SQLite log_dialog error: {e}", flush=True)
 
+def init_knowledge_db():
+    """Таблицы для живых знаний Розы: посты каналов и оперативные заметки команды."""
+    if DATABASE_URL:
+        try:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS channel_posts (
+                    id SERIAL PRIMARY KEY,
+                    chat TEXT,
+                    message_id BIGINT,
+                    posted_at TIMESTAMP,
+                    text TEXT,
+                    UNIQUE(chat, message_id)
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS knowledge_notes (
+                    id SERIAL PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    author TEXT,
+                    note TEXT,
+                    active BOOLEAN DEFAULT TRUE
+                )
+            """)
+            conn.commit()
+            cur.close(); conn.close()
+            return
+        except Exception as e:
+            print(f"Postgres knowledge init error, fallback to SQLite: {e}", flush=True)
+    conn = sqlite3.connect(DIALOG_DB)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS channel_posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            chat TEXT, message_id INTEGER, posted_at TEXT, text TEXT,
+            UNIQUE(chat, message_id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS knowledge_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT DEFAULT (datetime('now','localtime')),
+            author TEXT, note TEXT, active INTEGER DEFAULT 1
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+_live_knowledge_cache = {"ts": 0.0, "text": ""}
+
+def _bust_live_knowledge_cache():
+    _live_knowledge_cache["ts"] = 0.0
+
+def save_channel_post(chat, message_id, posted_at, text):
+    text = (text or "").strip()
+    if not text:
+        return
+    ts_str = posted_at.strftime("%Y-%m-%d %H:%M:%S") if hasattr(posted_at, "strftime") else str(posted_at)
+    try:
+        if DATABASE_URL:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO channel_posts (chat, message_id, posted_at, text) VALUES (%s,%s,%s,%s) "
+                "ON CONFLICT (chat, message_id) DO NOTHING",
+                (str(chat), int(message_id), ts_str, text)
+            )
+            conn.commit(); cur.close(); conn.close()
+        else:
+            conn = sqlite3.connect(DIALOG_DB)
+            conn.execute(
+                "INSERT OR IGNORE INTO channel_posts (chat, message_id, posted_at, text) VALUES (?,?,?,?)",
+                (str(chat), int(message_id), ts_str, text)
+            )
+            conn.commit(); conn.close()
+        _bust_live_knowledge_cache()
+    except Exception as e:
+        print(f"save_channel_post error: {e}", flush=True)
+
+def recent_channel_posts(days=14, limit=12):
+    import datetime as _dt
+    cutoff = (_dt.datetime.now() - _dt.timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        if DATABASE_URL:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT posted_at, chat, text FROM channel_posts WHERE posted_at >= %s "
+                "ORDER BY posted_at DESC LIMIT %s", (cutoff, limit)
+            )
+            rows = cur.fetchall()
+            cur.close(); conn.close()
+        else:
+            conn = sqlite3.connect(DIALOG_DB)
+            rows = conn.execute(
+                "SELECT posted_at, chat, text FROM channel_posts WHERE posted_at >= ? "
+                "ORDER BY posted_at DESC LIMIT ?", (cutoff, limit)
+            ).fetchall()
+            conn.close()
+        return rows
+    except Exception as e:
+        print(f"recent_channel_posts error: {e}", flush=True)
+        return []
+
+def save_knowledge_note(author, note):
+    try:
+        if DATABASE_URL:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO knowledge_notes (author, note) VALUES (%s,%s) RETURNING id",
+                (str(author), note)
+            )
+            note_id = cur.fetchone()[0]
+            conn.commit(); cur.close(); conn.close()
+        else:
+            conn = sqlite3.connect(DIALOG_DB)
+            cur = conn.execute("INSERT INTO knowledge_notes (author, note) VALUES (?,?)", (str(author), note))
+            note_id = cur.lastrowid
+            conn.commit(); conn.close()
+        _bust_live_knowledge_cache()
+        return note_id
+    except Exception as e:
+        print(f"save_knowledge_note error: {e}", flush=True)
+        return None
+
+def list_knowledge_notes(limit=30):
+    try:
+        if DATABASE_URL:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, created_at, note FROM knowledge_notes WHERE active = TRUE "
+                "ORDER BY id DESC LIMIT %s", (limit,)
+            )
+            rows = cur.fetchall()
+            cur.close(); conn.close()
+        else:
+            conn = sqlite3.connect(DIALOG_DB)
+            rows = conn.execute(
+                "SELECT id, created_at, note FROM knowledge_notes WHERE active = 1 "
+                "ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+            conn.close()
+        return rows
+    except Exception as e:
+        print(f"list_knowledge_notes error: {e}", flush=True)
+        return []
+
+def deactivate_knowledge_note(note_id):
+    try:
+        if DATABASE_URL:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute("UPDATE knowledge_notes SET active = FALSE WHERE id = %s", (note_id,))
+            changed = cur.rowcount
+            conn.commit(); cur.close(); conn.close()
+        else:
+            conn = sqlite3.connect(DIALOG_DB)
+            changed = conn.execute("UPDATE knowledge_notes SET active = 0 WHERE id = ?", (note_id,)).rowcount
+            conn.commit(); conn.close()
+        _bust_live_knowledge_cache()
+        return changed > 0
+    except Exception as e:
+        print(f"deactivate_knowledge_note error: {e}", flush=True)
+        return False
+
+def build_live_knowledge_section():
+    """Живые знания для промпта: заметки команды + свежие посты каналов. Кэш 5 минут."""
+    now = time.time()
+    if now - _live_knowledge_cache["ts"] < 300:
+        return _live_knowledge_cache["text"]
+
+    parts = []
+    notes = list_knowledge_notes(limit=30)
+    if notes:
+        lines = ["=== ОПЕРАТИВНЫЕ ЗАМЕТКИ КОМАНДЫ (самая свежая информация — приоритет над остальной базой) ==="]
+        for note_id, created_at, note in reversed(notes):
+            date_part = str(created_at)[:10]
+            lines.append(f"• [{date_part}] {note}")
+        parts.append("\n".join(lines))
+
+    posts = recent_channel_posts(days=14, limit=12)
+    if posts:
+        lines = [
+            "=== ПОСЛЕДНИЕ ПОСТЫ ИЗ КАНАЛОВ НАТАЛЬИ (за 14 дней) ===",
+            "Если клиент спрашивает про недавнюю рассылку, медитацию, эфир или пост — ищи ответ здесь и давай ссылку из поста.",
+            "Если в посте нет ответа на вопрос клиента (например, где именно лежит материал) — отвечай общим принципом:",
+            "«Бесплатные материалы Наталья выдаёт в дар — воспользоваться ими можно так, как предложено в публикации. Другими способами они не выдаются.»",
+        ]
+        for posted_at, chat, text in posts:
+            snippet = re.sub(r"\s+", " ", str(text)).strip()[:400]
+            date_part = str(posted_at)[:10]
+            lines.append(f"\n[{date_part} @{chat}] {snippet}")
+        parts.append("\n".join(lines))
+
+    result = "\n\n".join(parts)
+    _live_knowledge_cache["ts"] = now
+    _live_knowledge_cache["text"] = result
+    return result
+
 init_dialog_db()
+init_knowledge_db()
 
 web_app = Flask(__name__)
 
@@ -2688,12 +2890,16 @@ def find_similar(query, n=3):
         return ""
 
 def build_system_prompt(similar=""):
-    return SYSTEM_PROMPT_TEMPLATE.format(
+    prompt = SYSTEM_PROMPT_TEMPLATE.format(
         stream_recordings=STREAM_RECORDINGS,
         prices=PRICES,
         schedule=SCHEDULE,
         similar_section="=== ПОХОЖИЕ ДИАЛОГИ ИЗ ПРАКТИКИ ===\n" + similar
     )
+    live = build_live_knowledge_section()
+    if live:
+        prompt += "\n\n" + live
+    return prompt
 
 def load_history_from_db(conversation_key, limit=10):
     """Загружаем историю диалога из Postgres если в памяти ничего нет (после рестарта)."""
@@ -4558,6 +4764,32 @@ async def telethon_public_watcher():
         flush=True,
     )
 
+    # ── Каналы Натальи: слушаем новые посты и подтягиваем свежие при старте ──
+    # Роза читает эти каналы, чтобы знать про новые рассылки/медитации/эфиры
+    KNOWLEDGE_CHANNELS = ("psychic_abilities", "channelingMAC")
+    import datetime as _dt
+    for channel_username in KNOWLEDGE_CHANNELS:
+        try:
+            channel_entity = await tg_client.get_entity(channel_username)
+            # Бэкфилл: посты за последние 14 дней (переживает рестарты/redeploy)
+            cutoff = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=14)
+            backfilled = 0
+            async for msg in tg_client.iter_messages(channel_entity, limit=40):
+                if msg.date and msg.date < cutoff:
+                    break
+                if msg.raw_text:
+                    save_channel_post(channel_username, msg.id, msg.date, msg.raw_text)
+                    backfilled += 1
+            print(f"Telethon knowledge channel @{channel_username}: backfilled {backfilled} posts", flush=True)
+
+            @tg_client.on(events.NewMessage(chats=channel_entity))
+            async def on_channel_post(event, _ch=channel_username):
+                if event.raw_text:
+                    save_channel_post(_ch, event.id, event.date, event.raw_text)
+                    print(f"Telethon knowledge post saved: @{_ch} id={event.id}", flush=True)
+        except Exception as exc:
+            print(f"Telethon knowledge channel @{channel_username} unavailable: {exc}", flush=True)
+
     try:
         target_chat = await tg_client.get_entity(PUBLIC_DECODE_CHAT_USERNAME)
         print(
@@ -4709,6 +4941,42 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"  ⚠️ Claude: {_ai_stats.get('claude',0)}/{CLAUDE_DAILY_LIMIT} вызовов (платно!)\n"
                 f"  ❌ Нет ответа: {_ai_stats.get('failed',0)}"
             )
+            return
+
+        # «Запомни: ...» — добавить оперативную заметку в базу знаний Розы
+        _low = user_message.lower()
+        if _low.startswith(("запомни", "/note", "/запомни")):
+            note = re.sub(r"^(/note|/запомни|запомни)[:,]?\s*", "", user_message, flags=re.IGNORECASE).strip()
+            if not note:
+                await update.message.reply_text(
+                    "Напишите так:\nЗапомни: медитация Оленьей Луны — только в канале @channelingMAC"
+                )
+                return
+            note_id = save_knowledge_note(user_name, note)
+            if note_id:
+                await update.message.reply_text(
+                    f"📌 Запомнила (№{note_id}) — Роза сразу учитывает это в ответах.\n\n"
+                    f"Все заметки: напишите «Заметки»\nУдалить: «Забудь {note_id}»"
+                )
+            else:
+                await update.message.reply_text("❌ Не удалось сохранить заметку, посмотрите логи.")
+            return
+        # «Заметки» — список активных заметок
+        if _low.startswith(("заметки", "/notes", "/заметки")):
+            notes = list_knowledge_notes()
+            if not notes:
+                await update.message.reply_text("Заметок пока нет. Добавить: «Запомни: ...»")
+            else:
+                lines = [f"№{nid} [{str(created)[:10]}] {note}" for nid, created, note in notes]
+                await update.message.reply_text("📌 Заметки Розы:\n\n" + "\n\n".join(lines)[:3900])
+            return
+        # «Забудь N» — удалить заметку
+        if _low.startswith(("забудь", "/forget", "/забудь")):
+            m = re.search(r"\d+", user_message)
+            if m and deactivate_knowledge_note(int(m.group())):
+                await update.message.reply_text(f"🗑 Забыла заметку №{m.group()}.")
+            else:
+                await update.message.reply_text("Укажите номер: «Забудь 3». Список номеров: «Заметки»")
             return
 
         # /list — показать кто на ручном управлении
