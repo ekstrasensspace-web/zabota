@@ -3431,10 +3431,12 @@ def looks_like_symbol_decode_request(text):
     has_symbol = any(word in normalized for word in SYMBOL_WORDS)
     has_separator = "," in normalized or "\n" in text or ";" in normalized
     asks_decode = any(word in normalized for word in ("расшифр", "розшифр", "что значит", "що означає"))
-    has_decode_labels = any(word in normalized for word in (
-        "цвет", "колір", "цифра", "символ", "животное", "тварина"
-        # убрали "число" и "числа" — слишком часто встречается в бытовом смысле
-    ))
+    # Только отдельные слова (\b): иначе «проЦВЕТания» ловилось как «цвет»
+    # убрали "число" и "числа" — слишком часто встречается в бытовом смысле
+    has_decode_labels = re.search(
+        r"\b(цвет\w{0,4}|колір|кольор\w{0,4}|цифр\w{0,3}|символ\w{0,4}|животн\w{0,3}|тварин\w{0,3})\b",
+        normalized,
+    ) is not None
     return (
         (has_color or has_decode_labels)
         and (has_number or has_symbol or has_decode_labels)
