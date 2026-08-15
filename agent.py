@@ -4021,8 +4021,22 @@ def is_meaningless_text(text):
     # Email-адрес сам по себе — клиент прислал почту как данные, не вопрос
     if re.fullmatch(r'[\w.+\-]+@[\w\-]+\.[\w.\-]+', stripped):
         return True
+    # Голая ссылка (любая) без текста — не вопрос
+    if re.fullmatch(r'(https?://\S+|www\.\S+|t\.me/\S+)([\s\n]+(https?://\S+|www\.\S+|t\.me/\S+))*', stripped):
+        return True
     return False
 
+
+def is_hard_noise_message(message):
+    """Мусор, на который не отвечаем НИКОГДА — даже в активном диалоге:
+    видео-ссылки, CRM-теги, реклама, сырые payload, технический текст."""
+    return (
+        is_crm_automation_tag(message)
+        or is_raw_telegram_payload(message)
+        or is_advertising_spam(message)
+        or is_video_link_only(message)
+        or is_meaningless_text(message)
+    )
 
 def is_passive_funnel_message(message):
     """Не отвечаем ни на что, кроме явных вопросов/запросов клиента.
@@ -4241,7 +4255,8 @@ def process_salebot_message(payload, _debug_entry=None):
         print(f"SaleBot SKIP[comment]: client={client_id} msg={user_message[:80]!r}", flush=True)
         _set_result("⛔ комментарий")
         return
-    if is_salebot_noise_message(user_message) and not client_sent_requested_email(f"salebot:{client_id}", user_message):
+    if (is_salebot_noise_message(user_message) or is_hard_noise_message(user_message)) \
+            and not client_sent_requested_email(f"salebot:{client_id}", user_message):
         print(f"SaleBot SKIP[noise]: client={client_id} msg={user_message[:80]!r}", flush=True)
         _set_result("⛔ шум")
         return
@@ -4419,7 +4434,8 @@ def process_getcourse_message(payload):
         processed_getcourse_events.add(event_key)
         if len(processed_getcourse_events) > 1000:
             processed_getcourse_events.clear()
-    if is_salebot_noise_message(user_message) and not client_sent_requested_email(f"getcourse:{client_id}", user_message):
+    if (is_salebot_noise_message(user_message) or is_hard_noise_message(user_message)) \
+            and not client_sent_requested_email(f"getcourse:{client_id}", user_message):
         print(f"GetCourse noise ignored for client {client_id}: {user_message[:120]}", flush=True)
         return None
     if is_passive_funnel_message(user_message):
