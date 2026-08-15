@@ -3437,11 +3437,13 @@ def looks_like_symbol_decode_request(text):
         r"\b(цвет\w{0,4}|колір|кольор\w{0,4}|цифр\w{0,3}|символ\w{0,4}|животн\w{0,3}|тварин\w{0,3})\b",
         normalized,
     ) is not None
-    return (
-        (has_color or has_decode_labels)
-        and (has_number or has_symbol or has_decode_labels)
-        and (has_separator or asks_decode or has_decode_labels or len(normalized.split()) <= 12)
-    )
+    # Расшифровываем только НАСТОЯЩИЕ комбинации: минимум 2 элемента из трёх
+    # (цвет + цифра + символ/животное) — или прямую просьбу «расшифруйте».
+    # Одиночное упоминание цвета/животного в обычном тексте — не повод для расшифровки.
+    score = int(has_color) + int(has_number) + int(has_symbol)
+    if asks_decode and (score >= 1 or has_decode_labels):
+        return True
+    return score >= 2 and (has_separator or has_decode_labels or len(normalized.split()) <= 12)
 
 def local_symbol_decode_reply(user_message, language="ru"):
     normalized = user_message.lower()
