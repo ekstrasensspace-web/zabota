@@ -4770,6 +4770,35 @@ def admin_panel():
 </html>"""
     return html
 
+@web_app.route("/admin/notes")
+def admin_notes():
+    """Просмотр/добавление/удаление оперативных заметок Розы из браузера.
+    ?add=текст — добавить, ?del=N — удалить, без параметров — список."""
+    pwd = request.args.get("pwd", "")
+    if pwd != ADMIN_PASSWORD:
+        return "<h2>403 Forbidden</h2>", 403
+    add_text = request.args.get("add", "").strip()
+    del_id = request.args.get("del", "").strip()
+    result = ""
+    if add_text:
+        note_id = save_knowledge_note("admin-web", add_text)
+        result = f"<p>📌 Добавлена заметка №{note_id}</p>" if note_id else "<p>❌ Ошибка сохранения</p>"
+    elif del_id.isdigit():
+        ok = deactivate_knowledge_note(int(del_id))
+        result = f"<p>🗑 Заметка №{del_id} удалена</p>" if ok else f"<p>❌ Заметка №{del_id} не найдена</p>"
+    notes = list_knowledge_notes(limit=100)
+    rows = "".join(
+        f"<li>№{nid} <small>[{str(created)[:16]}]</small> {str(note)} "
+        f"<a href='?pwd={pwd}&del={nid}'>удалить</a></li>"
+        for nid, created, note in notes
+    ) or "<li>Заметок нет</li>"
+    storage = "Postgres ✅" if DATABASE_URL else "SQLite (стирается при деплое!) ⚠️"
+    return (
+        f"<html><head><meta charset='utf-8'><title>Заметки Розы</title></head><body>"
+        f"<h2>📌 Оперативные заметки Розы</h2><p>Хранилище: {storage}</p>{result}<ul>{rows}</ul>"
+        f"<p>Добавить: допишите к адресу &add=текст заметки</p></body></html>"
+    )
+
 @web_app.route("/admin/export")
 def admin_export():
     """Экспорт диалогов за указанную дату (по умолчанию — вчера) в текстовый файл."""
