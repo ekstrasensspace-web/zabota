@@ -2510,6 +2510,32 @@ def attention_drain_reply(text):
         "Если после него появится готовность идти глубже — возвращайтесь."
     )
 
+def course_catalog_reply(text):
+    """«Какие есть курсы?» → сразу ссылки на сайты, без анкетирования."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return None
+    catalog_markers = (
+        "какие есть курсы", "какие курсы есть", "какие у вас курсы", "какие курсы",
+        "список курсов", "каталог курсов", "перечень курсов", "все курсы",
+        "что за курсы", "какие направления", "какие программы", "чему учите",
+        "что вы предлагаете", "что у вас есть",
+    )
+    if not any(m in normalized for m in catalog_markers):
+        return None
+    # Если названа конкретная тема — пусть отвечает AI предметно
+    topic_markers = ("рун", "ченнелинг", "рейки", "луч", "египт", "друид",
+                     "целитель", "таро", "ангел", "медитац", "защит")
+    if any(t in normalized for t in topic_markers):
+        return None
+    return (
+        "Все курсы и программы Академии собраны на сайте:\n"
+        "https://sverhspobnosti.ru/\n"
+        "https://superabilitiesacademy.com/\n\n"
+        "Посмотрите, что откликнется. А если скажете, какая тема ближе — "
+        "руны, ченнелинг, целительство, 7 Лучей — подскажу конкретнее."
+    )
+
 def entry_marathon_reply(text):
     """Базовый вход для нормальных новых людей: сначала марафон Энергия."""
     normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
@@ -2962,6 +2988,7 @@ def predefined_reply_for_message(text):
         or meditation_link_reply(text)
         or refund_boundary_reply(text)
         or attention_drain_reply(text)
+        or course_catalog_reply(text)
         or entry_marathon_reply(text)
         or money_block_objection_reply(text)
         or free_only_boundary_reply(text)
