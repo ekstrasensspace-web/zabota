@@ -882,7 +882,7 @@ Telegram заблокирован, нет VPN →
 
 «Я ЕЩЁ НЕ ОПРЕДЕЛИЛАСЬ / ЗАВТРА СООБЩУ»
 Колеблется но не уходит. Не жди завтра — дай что-то сделать прямо сейчас:
-«Пока думаете — пройдите анкету, она поможет понять что именно вам подойдёт: https://superabilityacademy.com/CHOICE_OF_PATH»
+«Пока думаете — пройдите анкету, она поможет понять что именно вам подойдёт: https://superabilityacademy.com/CHOICE_OF_PATH_2?utm_source=direct»
 
 «ПОДУМАЮ» / «ПОСМОТРЮ» / «МОЖЕТ БЫТЬ»
 Вежливый уход. Не отпускай:
@@ -942,6 +942,10 @@ Telegram заблокирован, нет VPN →
 Человеку, который написал «я оплатила» и сообщает о проблеме — НИКОГДА не отвечай формулами отбора («Обучение для тех, кто берёт ответственность», «лучше выбрать другой формат», «сейчас не время»). Оплата = обязательства Академии. Разбирайся с проблемой или направляй в @mac_academy.
 Фразу «Все варианты доступа я уже дала... сейчас не время» можно сказать только после того, как клиент получил ответы на ВСЕ свои конкретные вопросы. Если клиент задал новый вопрос (как называется канал? есть ли ВК?) — сначала ответь на него: канал @psychic_abilities, группа ВК https://vk.com/nataliadyachenkocoach.
 
+РАССРОЧКА / «ОПЛАТИТЬ В ДВА РАЗА» = ГОРЯЧИЙ ЛИД:
+Если клиент спрашивает «можно оплатить частями / в два раза / в рассрочку» и называет курс — он ГОТОВ покупать. Не предлагай ничего другого (ни книг, ни марафонов!).
+Ответ: «Да, рассрочка есть — прямо на странице оплаты можно выбрать оплату частями: [ссылка на курс]. Если удобнее особый график (например, две оплаты с интервалом) — напишите в @mac_academy, там оформят индивидуально.»
+
 ЦЕНУ ИЗ БАЗЫ НАЗЫВАЙ ЦИФРОЙ:
 Если клиент спрашивает «сколько стоит?» и цена есть в базе — назови её сразу цифрой. НЕ отправляй «посмотрите на странице».
 
@@ -982,7 +986,7 @@ Telegram заблокирован, нет VPN →
   Магия Египта → https://superabilityacademy.com/magia_egipta
   Магия Друидов → https://ekstrasens.space/magicdruidscourse
   Круг Хранителей (клуб) → https://superabilityacademy.com/club
-  Путь Белого Мага → https://superabilityacademy.com/CHOICE_OF_PATH
+  Путь Белого Мага → https://superabilityacademy.com/CHOICE_OF_PATH_2?utm_source=direct
   Пробуждение Силы Рода → https://ekstrasensschool.getcourse.ru/awakeningpowerbloodline
   Щит Света → https://superabilityacademy.com/Shchit_Sveta
   Активация Дара → https://ekstrasensschool.getcourse.ru/buy_talent-activation
@@ -995,7 +999,7 @@ Telegram заблокирован, нет VPN →
   Магия Ангелов → https://superabilitiesacademy.com/angelmagic
 
 АНКЕТЫ (отправлять как первый шаг когда клиент хочет «тест», «понять свой путь», «узнать способности»):
-  Выбор Пути (общая, если не знает что хочет) → https://superabilityacademy.com/CHOICE_OF_PATH
+  Выбор Пути (общая, если не знает что хочет) → https://superabilityacademy.com/CHOICE_OF_PATH_2?utm_source=direct
   Ченнелинг → https://superabilityacademy.com/channeling_anketa
   Ченнелинг (холодный) → https://superabilityacademy.com/channeling_anketa_c
   7 Лучей → https://superabilityacademy.com/seven_rays_anketa
@@ -1140,7 +1144,7 @@ Telegram заблокирован, нет VPN →
 НЕ пытайся угадать что входит в программу и не придумывай состав. Просто:
 1. Скажи что это Путь Белого Мага — закрытая годовая программа
 2. Предложи заполнить анкету «Выбор пути» — специалист свяжется и расскажет подробно
-Шаблон: «Путь Белого Мага — это закрытая годовая программа. Набор идёт через анкету — заполните, и специалист свяжется с вами: https://superabilityacademy.com/CHOICE_OF_PATH»
+Шаблон: «Путь Белого Мага — это закрытая годовая программа. Набор идёт через анкету — заполните, и специалист свяжется с вами: https://superabilityacademy.com/CHOICE_OF_PATH_2?utm_source=direct»
 
 ДИАГНОСТИЧЕСКИЕ АНКЕТЫ — КОГДА И КАК ПРЕДЛАГАТЬ:
 
@@ -1271,12 +1275,12 @@ nataliaray.com/books/healing-basics
   Рейки Бон → https://superabilityacademy.com/anketa_reiki_bon
   Магия Египта → https://superabilityacademy.com/anketa_egypt_vrata_maat
   Круг Хранителей (клуб) → https://superabilityacademy.com/club_anketa
-  Путь Белого Мага (годовая программа) → https://superabilityacademy.com/CHOICE_OF_PATH
+  Путь Белого Мага (годовая программа) → https://superabilityacademy.com/CHOICE_OF_PATH_2?utm_source=direct
 
 ЕСЛИ КЛИЕНТ НЕ ЗНАЕТ ЧТО ЕМУ НУЖНО (общий запрос «тест», «хочу узнать способности»):
-→ Давай анкету «Выбор Пути»: https://superabilityacademy.com/CHOICE_OF_PATH
+→ Давай анкету «Выбор Пути»: https://superabilityacademy.com/CHOICE_OF_PATH_2?utm_source=direct
   Она помогает определить какое направление подходит именно этому человеку.
-  Шаблон: "У нас есть анкета — за несколько вопросов поможет понять к какому пути вас тянет больше всего: https://superabilityacademy.com/CHOICE_OF_PATH"
+  Шаблон: "У нас есть анкета — за несколько вопросов поможет понять к какому пути вас тянет больше всего: https://superabilityacademy.com/CHOICE_OF_PATH_2?utm_source=direct"
 
 ПОСЛЕ АНКЕТЫ — клиент получает рекомендацию и сам решает идти ли в курс.
 
@@ -1694,6 +1698,7 @@ def build_groq_system_prompt(user_message):
 Если Telegram у клиента не работает — VPN, либо группа ВК: https://vk.com/nataliadyachenkocoach
 
 Если клиент хочет оплатить — уточни: картой российского банка или зарубежной.
+«Можно оплатить частями / в два раза / рассрочка?» = горячий лид: подтверди — рассрочка есть на странице оплаты курса, дай ссылку курса; особый график — @mac_academy. Не предлагай вместо этого книги или марафоны.
 Если клиент просит возврат — НЕ обещай. Спроси основание: доступ не открыт, не соответствует описанию, ошибка Академии? → «Опишите ситуацию в @mac_academy — там разберут.»
 Плохая связь / блокировка Telegram / нет VPN — условия на стороне клиента, Академия за них не отвечает, возврат по этой причине не оформляется.
 Возражение «не могу купить, пока не снят блок на деньги» — разворачивай, не закрывай: «Блок на деньги не снимется сам — он как раз и проявляется в том, что находит причину отложить. Курс — это и есть инструмент снятия блока. Ждать, пока блок уйдёт, чтобы начать работу с блоком — значит остаться в нём. Готовы сделать первый шаг?» Закрывай диалог только если после разворота клиент снова уходит в «не могу».
@@ -2568,6 +2573,46 @@ def course_catalog_reply(text):
         "руны, ченнелинг, целительство, 7 Лучей — подскажу конкретнее."
     )
 
+def marathon_funnel_reply(text):
+    """Запрос конкретного марафона → соответствующая воронка, а не «Энергия»."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return None
+    wants_marathon = any(m in normalized for m in (
+        "марафон", "зарегистрир", "записаться", "запишите", "регистрац", "как попасть",
+    ))
+    if not wants_marathon:
+        return None
+    # Не перехватываем вопросы про идущее событие (зум/трансляция) — их решает AI/оператор
+    if any(m in normalized for m in ("zoom", "зум", "трансляц", "не открывается", "не работает", "ссылка не")):
+        return None
+
+    def funnel(name, url):
+        return (
+            f"Вот ссылка для участия в марафоне {name}: {url}\n\n"
+            "Нажмите «Старт» в боте — и вся информация придёт автоматически."
+        )
+
+    if any(m in normalized for m in ("7 луч", "семь луч", "лучи", "лучей")):
+        return funnel("«7 Лучей»", "https://t.me/mac_academy_bot?start=utm-CATl5TZblY8SzW9alXI067514")
+    if re.search(r"\bрун", normalized):
+        return funnel("«Магия Рун»", "https://t.me/mac_academy_bot?start=utm-wdXdsvQUOygrLS0YgmQ067514")
+    if "друид" in normalized:
+        return funnel("«Магия Друидов»", "https://t.me/mac_academy_bot?start=utm-C6JAjDsMTbPj4Pk3nFS067514")
+    if any(m in normalized for m in ("белого мага", "белый маг", "ченнелинг")):
+        return funnel("«Путь Белого Мага»", "https://t.me/mac_academy_bot?start=utm-gZukD8zykRFaFeYE54p067514")
+    if any(m in normalized for m in ("хранителя рода", "дара хранителя", "дар рода", "сил рода", "силы рода")):
+        return funnel("«Пробуждение дара хранителя рода»", "https://t.me/mac_academy_bot?start=utm-n2nyEFzhswE2ccELSTS067514")
+    if any(m in normalized for m in ("рейки", "тибет", "египт", "египет", "врата")):
+        # Отдельной воронки нет — анонсы и записи в канале
+        return (
+            "Анонсы и записи этого марафона публикуются в канале @psychic_abilities — "
+            "подпишитесь, там будет вся информация о датах и регистрации.\n\n"
+            "А пока можно начать с воронки «Пробуждение дара хранителя рода»: "
+            "https://t.me/mac_academy_bot?start=utm-n2nyEFzhswE2ccELSTS067514"
+        )
+    return None
+
 def entry_marathon_reply(text):
     """Базовый вход для нормальных новых людей: сначала марафон Энергия."""
     normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
@@ -2820,7 +2865,7 @@ def path_to_self_reply(text):
     return (
         "Это очень важный запрос — когда душа уже чувствует, что пора вернуться к себе и понять своё направление.\n\n"
         "Для первого шага у нас есть анкета «Выбор пути». Она помогает увидеть, куда сейчас тянет душу и через какие способности вам легче раскрыться:\n"
-        "https://superabilityacademy.com/CHOICE_OF_PATH\n\n"
+        "https://superabilityacademy.com/CHOICE_OF_PATH_2?utm_source=direct\n\n"
         "А если хочется не просто диагностику, а практику для движения к предназначению, можно начать с программы «Начать путь к предназначению» — 9 900 ₽:\n"
         "https://superabilityacademy.com/way\n\n"
         "Начните с анкеты — и по результату будет понятнее, какой путь вам ближе."
@@ -2847,8 +2892,8 @@ def book_purchase_reply(text):
     # Подбираем конкретную книгу по названию
     if "белого мага" in normalized or "белый маг" in normalized or "путь мага" in normalized:
         return (
-            "Книга «Путь белого мага» — 390 ₽, доступ сразу после оплаты:\n"
-            "nataliaray.com/books/product-1780600391254\n\n"
+            "Книга «Путь белого мага» — 390 ₽. Забрать можно здесь:\n"
+            "https://t.me/mac_academy_bot?start=utm-YAHQAr8JuYcXYYVGDas067514\n\n"
             "Все книги Натальи: https://nataliaray.com/catalog"
         )
     if "звёздные души" in normalized or "звездные души" in normalized:
@@ -2871,14 +2916,14 @@ def book_purchase_reply(text):
         )
     if "7 лучей" in normalized or "семь лучей" in normalized or "магия 7" in normalized:
         return (
-            "Книга «Магия 7 Лучей» — 2 900 ₽, доступ сразу после оплаты:\n"
-            "nataliaray.com/books/magic-7-rays\n\n"
+            "Книга «Магия 7 Лучей» — 2 900 ₽. Забрать можно здесь:\n"
+            "https://t.me/mac_academy_bot?start=utm-BKSWFa3jXqIJlWOtuFS067514\n\n"
             "Все книги Натальи: https://nataliaray.com/catalog"
         )
     if "магия друидов" in normalized:
         return (
-            "Книга «Магия Друидов» — 390 ₽, доступ сразу после оплаты:\n"
-            "nataliaray.com/books/product-1780600447019\n\n"
+            "Книга «Магия Друидов» — 390 ₽. Забрать можно здесь:\n"
+            "https://t.me/mac_academy_bot?start=utm-VTO23Vvo5WWWE0yrGJq067514\n\n"
             "Все книги Натальи: https://nataliaray.com/catalog"
         )
     # Общий запрос про книги
@@ -2923,7 +2968,7 @@ def ability_test_reply(text):
     return (
         "Чтобы понять, какие способности у вас развиты — пройдите анкету «Выбор Пути». "
         "За несколько вопросов она покажет к какому направлению вас тянет больше всего:\n"
-        "https://superabilityacademy.com/CHOICE_OF_PATH\n\n"
+        "https://superabilityacademy.com/CHOICE_OF_PATH_2?utm_source=direct\n\n"
         "Или если интересен конкретный курс — есть отдельные анкеты по каждому направлению."
     )
 
@@ -3037,6 +3082,7 @@ def predefined_reply_for_message(text):
         or refund_boundary_reply(text)
         or attention_drain_reply(text)
         or runes_price_reply(text)
+        or marathon_funnel_reply(text)
         or course_catalog_reply(text)
         or entry_marathon_reply(text)
         or money_block_objection_reply(text)
