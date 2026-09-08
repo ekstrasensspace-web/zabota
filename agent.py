@@ -2398,8 +2398,8 @@ def is_financial_spam(text):
     normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
     if not normalized:
         return False
-    money_markers = ("деньг", "заработ", "доход", "прибыл", "инвест", "крипт",
-                     "пассивный доход", "финансовая возможность", "схема", "быстрые деньги")
+    money_markers = ("деньг", "денег", "заработ", "доход", "прибыл", "инвест", "крипт",
+                     "пассивный доход", "финансовая возможность", "быстрые деньги")
     dm_markers = ("в лс", "в личку", "в личны", "в директ", "пишите мне", "пиши мне",
                   "напиши мне", "в личке", "лично мне")
     return any(m in normalized for m in money_markers) and any(m in normalized for m in dm_markers)
