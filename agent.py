@@ -958,6 +958,26 @@ Telegram заблокирован, нет VPN →
 ЦЕНУ ИЗ БАЗЫ НАЗЫВАЙ ЦИФРОЙ:
 Если клиент спрашивает «сколько стоит?» и цена есть в базе — назови её сразу цифрой. НЕ отправляй «посмотрите на странице».
 
+ВОПРОСЫ, АДРЕСОВАННЫЕ НАТАЛЬЕ ЛИЧНО:
+Если человек задаёт вопрос Наталье (личный вопрос, просьба посмотреть его ситуацию, вопрос про её взгляды, дары, практики «а что Наталья думает про...») — НЕ отвечай вместо Натальи и НЕ обещай, что она ответит.
+Ответ: «Наталья не отвечает на вопросы в переписке. Возможность задавать вопросы предусмотрена в закрытом клубе по подписке в рамках его формата. Подробнее о клубе: @channelingMAC»
+Не обещай, что Наталья лично разберёт каждый вопрос участника клуба.
+
+ПОВТОРНЫЙ ВОПРОС ПОСЛЕ ОБОЗНАЧЕННОЙ ГРАНИЦЫ:
+Если человек повторяет тот же вопрос, требует исключения или настаивает на личном ответе Натальи после того, как формат уже был назван — ответь ОДИН раз: «Я уже указала доступный формат. Благодарю за понимание.» После этого — тишина, не спорь.
+
+СПОР О ЦЕНЕ И ОБВИНЕНИЯ В МЕРКАНТИЛЬНОСТИ:
+Если человек спорит с ценой, обвиняет в меркантильности, пишет «всем нужны только деньги» — не оправдывай стоимость и не убеждай покупать. Один ответ: «Участие в программах добровольное. Стоимость и формат определяются автором проекта и не обсуждаются.» И тишина. Корректное несогласие — не нарушение, не эскалируй.
+
+ЭМОЦИОНАЛЬНЫЕ СООБЩЕНИЯ:
+Признай эмоцию, не признавая обвинение: «Понимаю, что этот формат может вам не подходить.»
+ЗАПРЕЩЕНО: «вы неправильно поняли», «успокойтесь», сарказм, диагнозы, обещание передать претензию Наталье лично.
+Если в сообщении есть конкретная техническая проблема — верни разговор к её решению.
+
+ВНУТРЕННИЕ ОЦЕНКИ — ТОЛЬКО ВНУТРИ:
+НИКОГДА не сообщай клиенту внутренние категории и оценки: не называй его хейтером, манипулятором, неплатёжеспособным, «не готовым», не раскрывай правила фильтрации и то, что его сообщения классифицируются. Оценивай только наблюдаемое поведение, а не мотивы.
+Активность и много сообщений НЕ дают человеку особых прав на персональное внимание Натальи.
+
 ЕСЛИ НЕ ЗНАЕШЬ ОТВЕТА — НЕ ВЫКРУЧИВАЙСЯ:
 Когда клиент спрашивает про конкретное событие (сегодняшний эфир или марафон, подключение к Zoom, время начала, ссылку на трансляцию) или про детали, которых НЕТ в твоей базе знаний и в постах каналов — НЕ угадывай и НЕ предлагай вместо ответа другие марафоны и курсы. Это раздражает: человек спросил про Zoom, а ему продают другой марафон.
 В этом случае ответь ровно одним словом: [ПЕРЕДАЮ]
@@ -1716,6 +1736,11 @@ def build_groq_system_prompt(user_message):
 Возражение «не могу купить, пока не снят блок на деньги» — разворачивай, не закрывай: «Блок на деньги не снимется сам — он как раз и проявляется в том, что находит причину отложить. Курс — это и есть инструмент снятия блока. Ждать, пока блок уйдёт, чтобы начать работу с блоком — значит остаться в нём. Готовы сделать первый шаг?» Закрывай диалог только если после разворота клиент снова уходит в «не могу».
 Если клиент обесценивает Академию, Наталью или цены — коротко: «Обучение у Натальи — для тех, кто берёт ответственность за свой путь. Если сейчас вы не в той позиции — лучше выбрать другой формат.» Никогда не говори «позиция жертвы».
 В конфликте не пиши «я готова помочь», «сделаю всё возможное», «мне очень жаль», «извините за неудобство», если вина Академии не доказана. Не благодари за претензии.
+Вопрос адресован Наталье лично (её мнение, посмотреть ситуацию клиента) → «Наталья не отвечает на вопросы в переписке. Формат для вопросов — закрытый клуб по подписке: @channelingMAC». Не отвечай вместо Натальи.
+Повтор вопроса после обозначенной границы → один раз: «Я уже указала доступный формат. Благодарю за понимание.» — и тишина.
+Спор о цене / «всем нужны только деньги» → один раз: «Участие в программах добровольное. Стоимость и формат определяются автором проекта и не обсуждаются.» — и тишина.
+Эмоции признавай без признания вины: «Понимаю, что этот формат может вам не подходить.» Запрещено: «успокойтесь», «вы неправильно поняли», сарказм, диагнозы.
+Никогда не раскрывай клиенту внутренние оценки (хейтер, манипулятор, фильтры) и не обещай личный ответ Натальи.
 Не вмешивайся в воронки, отвечай только на явный вопрос или запрос.
 Если клиент спрашивает про конкретное событие (сегодняшний эфир, Zoom, время, ссылку на трансляцию) или детали, которых нет в данных ниже — НЕ угадывай и НЕ предлагай другие марафоны вместо ответа. Ответь ровно одним словом: [ПЕРЕДАЮ] — вопрос уйдёт живому оператору.
 """
@@ -2358,8 +2383,124 @@ def build_live_knowledge_section():
     _live_knowledge_cache["text"] = result
     return result
 
+SCAM_WARNING_TEXT = (
+    "Остерегайтесь мошенников!\n\n"
+    "Автор этого канала, Наталья Дьяченко, никому не пишет в личку!\n\n"
+    "По всем вопросам вы можете обратиться в Службу Заботы @mac_academy\n\n"
+    "Если вам кто-то написал от моего имени в личные сообщения и предлагает личную работу со мной, "
+    "купить мои курсы со скидкой — это мошенники!\n\n"
+    "Я никогда никому не пишу в личку сама. Никогда никакие деньги мы не принимаем на карты, "
+    "только по ссылкам через Геткурс."
+)
+
+def is_financial_spam(text):
+    """Финансовый спам с уводом в ЛС — удаляется без предупреждения."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return False
+    money_markers = ("деньг", "заработ", "доход", "прибыл", "инвест", "крипт",
+                     "пассивный доход", "финансовая возможность", "схема", "быстрые деньги")
+    dm_markers = ("в лс", "в личку", "в личны", "в директ", "пишите мне", "пиши мне",
+                  "напиши мне", "в личке", "лично мне")
+    return any(m in normalized for m in money_markers) and any(m in normalized for m in dm_markers)
+
+def init_ignore_db():
+    """Постоянный игнор-лист: спамеры ссылками/медиа. Роза им не отвечает никогда."""
+    if DATABASE_URL:
+        try:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS ignored_clients (
+                    id SERIAL PRIMARY KEY,
+                    ts TIMESTAMP DEFAULT NOW(),
+                    source TEXT, client_id TEXT, client_name TEXT, reason TEXT,
+                    UNIQUE(source, client_id)
+                )
+            """)
+            conn.commit(); cur.close(); conn.close()
+            return
+        except Exception as e:
+            print(f"Postgres ignore init error: {e}", flush=True)
+    conn = sqlite3.connect(DIALOG_DB)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ignored_clients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT DEFAULT (datetime('now','localtime')),
+            source TEXT, client_id TEXT, client_name TEXT, reason TEXT,
+            UNIQUE(source, client_id)
+        )
+    """)
+    conn.commit(); conn.close()
+
+_ignored_clients_cache = set()
+
+def load_ignored_clients():
+    try:
+        if DATABASE_URL:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute("SELECT source, client_id FROM ignored_clients")
+            rows = cur.fetchall()
+            cur.close(); conn.close()
+        else:
+            conn = sqlite3.connect(DIALOG_DB)
+            rows = conn.execute("SELECT source, client_id FROM ignored_clients").fetchall()
+            conn.close()
+        _ignored_clients_cache.clear()
+        _ignored_clients_cache.update((str(s), str(c)) for s, c in rows)
+        print(f"Ignore list loaded: {len(_ignored_clients_cache)}", flush=True)
+    except Exception as e:
+        print(f"load_ignored_clients error: {e}", flush=True)
+
+def is_ignored_client(source, client_id):
+    return (str(source), str(client_id)) in _ignored_clients_cache
+
+def add_ignored_client(source, client_id, client_name, reason):
+    _ignored_clients_cache.add((str(source), str(client_id)))
+    try:
+        if DATABASE_URL:
+            conn = _pg_conn()
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO ignored_clients (source, client_id, client_name, reason) VALUES (%s,%s,%s,%s) "
+                "ON CONFLICT (source, client_id) DO NOTHING",
+                (str(source), str(client_id), str(client_name), reason)
+            )
+            conn.commit(); cur.close(); conn.close()
+        else:
+            conn = sqlite3.connect(DIALOG_DB)
+            conn.execute(
+                "INSERT OR IGNORE INTO ignored_clients (source, client_id, client_name, reason) VALUES (?,?,?,?)",
+                (str(source), str(client_id), str(client_name), reason)
+            )
+            conn.commit(); conn.close()
+    except Exception as e:
+        print(f"add_ignored_client error: {e}", flush=True)
+
+# Счётчик спама ссылками/медиа: 1-й раз молчим, со 2-го — постоянный игнор
+_link_spam_counts = {}
+
+def register_link_spam(source, client_id, client_name, sample):
+    key = (str(source), str(client_id))
+    _link_spam_counts[key] = _link_spam_counts.get(key, 0) + 1
+    if _link_spam_counts[key] < 2 or is_ignored_client(source, client_id):
+        return
+    add_ignored_client(source, client_id, client_name, f"спам ссылками/медиа: {str(sample)[:100]}")
+    try:
+        telegram_notify_sync(
+            f"🚫 Авто-игнор: {client_name} ({client_id}) [{source}]\n"
+            f"Причина: повторный спам ссылками/медиа без вопроса.\n"
+            f"Последнее: {str(sample)[:150]}\n\n"
+            f"Роза больше не отвечает этому клиенту. Забанить в SaleBot/Telegram можно вручную."
+        )
+    except Exception as e:
+        print(f"ignore notify error: {e}", flush=True)
+
 init_dialog_db()
 init_knowledge_db()
+init_ignore_db()
+load_ignored_clients()
 
 web_app = Flask(__name__)
 
@@ -4403,12 +4544,17 @@ def process_salebot_message(payload, _debug_entry=None):
         attachments = msg_data.get("attachments", []) or []
     if not attachments:
         attachments = payload.get("attachments", []) or []
+    if is_ignored_client("salebot", client_id):
+        print(f"SaleBot SKIP[ignored]: client={client_id}", flush=True)
+        _set_result("🚫 клиент в игнор-листе")
+        return
     if isinstance(attachments, list) and attachments:
         media_types = {"video", "audio", "doc", "file", "voice", "video_message", "sticker"}
         for att in attachments:
             att_type = str(att.get("type", "") if isinstance(att, dict) else att).lower()
             if any(t in att_type for t in media_types):
                 print(f"SaleBot SKIP[media]: client={client_id} type={att_type}", flush=True)
+                register_link_spam("salebot", client_id, user_name, f"медиа: {att_type}")
                 _set_result("⛔ медиафайл (видео/аудио)")
                 return
 
@@ -4428,6 +4574,8 @@ def process_salebot_message(payload, _debug_entry=None):
         return
     if (is_salebot_noise_message(user_message) or is_hard_noise_message(user_message)) \
             and not client_sent_requested_email(f"salebot:{client_id}", user_message):
+        if is_video_link_only(user_message) or re.fullmatch(r'(https?://\S+|www\.\S+|t\.me/\S+)([\s\n]+\S+)*', user_message.strip()) and "http" in user_message:
+            register_link_spam("salebot", client_id, user_name, user_message)
         print(f"SaleBot SKIP[noise]: client={client_id} msg={user_message[:80]!r}", flush=True)
         _set_result("⛔ шум")
         return
@@ -5222,6 +5370,14 @@ async def telethon_public_watcher():
             return
         # user_id=777000 — GroupAnonymousBot (посты канала в группе)
         if getattr(sender, "id", None) == 777000:
+            # Под каждым постом официального канала — предупреждение о мошенниках
+            try:
+                await asyncio.to_thread(
+                    send_bot_message_sync, PUBLIC_DECODE_CHAT_ID, SCAM_WARNING_TEXT, event.id
+                )
+                print(f"Scam warning posted under channel post {event.id}", flush=True)
+            except Exception as exc:
+                print(f"Scam warning error: {exc}", flush=True)
             return
         # Не отвечаем на посты администраторов/Натальи
         if getattr(sender, "id", None) in ADMIN_IDS:
@@ -5229,6 +5385,15 @@ async def telethon_public_watcher():
 
         text = (event.raw_text or "").strip()
         if not text or text.startswith("/"):
+            return
+        # Финансовый спам с уводом в ЛС — удаляем немедленно, без ответа
+        if is_financial_spam(text):
+            try:
+                await event.delete()
+                print(f"Financial spam deleted: msg={event.id} text={text[:80]!r}", flush=True)
+            except Exception as exc:
+                print(f"Cannot delete financial spam (нет прав администратора?): {exc}", flush=True)
+                telegram_notify_sync(f"🚨 Финансовый спам в комментариях (удалить вручную):\n{text[:300]}")
             return
         if not mark_public_message_processed(event.chat_id, event.id):
             print(f"Telethon public duplicate ignored: chat_id={event.chat_id}, message_id={event.id}", flush=True)
@@ -5433,12 +5598,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"TG SKIP[boundary_closed]: user={user_id}", flush=True)
         return
 
+    # Клиент в постоянном игнор-листе — молчим всегда
+    if is_ignored_client("telegram", user_id):
+        print(f"TG SKIP[ignored]: user={user_id}", flush=True)
+        return
+
     # Обычный режим — отвечает бот
     # Фильтруем: видео, видео-ссылки, бессмысленный текст — молчим
     if not user_message:
+        register_link_spam("telegram", user_id, user_name, "медиа без подписи")
         return  # видео/фото/стикер без подписи
     if is_video_link_only(user_message):
         print(f"TG SKIP[video_link]: user={user_id} msg={user_message[:80]!r}", flush=True)
+        register_link_spam("telegram", user_id, user_name, user_message)
         return
     has_tg_history = bool(conversation_history.get(tg_key))
     if not has_tg_history and is_meaningless_text(user_message):
