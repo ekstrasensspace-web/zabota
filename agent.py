@@ -55,6 +55,12 @@ STREAM_RECORDINGS = """
 Медитации, которые Наталья анонсирует в рассылках (например, медитация Оленьей Луны), выкладываются ТОЛЬКО в канале «Хранители предзапись»: @channelingMAC.
 Медитации марафона «7 Лучей» из рассылок — в канале @otzyvyluchi.
 
+=== КЛУБ НАТАЛЬИ И КОНТАКТ ЕКАТЕРИНЫ ===
+Если спрашивают контакт Екатерины (Климовой) или как попасть/войти в клуб Натальи — отвечай:
+«ВХОД В КЛУБ НАТАЛЬИ: https://ezoteric-club.lovable.app/
+Подпишитесь на ТГ-канал Екатерины: https://t.me/klimova_pro_ezoteriku»
+Личных телефонов и почт Екатерины не давай — их нет.
+
 === ОТЗЫВЫ ===
 Все отзывы студентов Академии собраны в группе: https://t.me/+v9PtSJ9wQaEwY2Ri
 Когда клиент спрашивает про отзывы — давай эту ссылку и предложи подсказать по конкретному курсу.
@@ -2396,6 +2402,82 @@ SCAM_WARNING_TEXT = (
     "только по ссылкам через Геткурс."
 )
 
+def classify_public_spam(text):
+    """Спам в комментариях канала. Возвращает 'delete' (точный спам), 'silence' (похоже на спам) или None."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return None
+
+    has_link = bool(re.search(r"https?://|t\.me/|@[a-z_]{4,}|bit\.ly|clck\.ru", normalized))
+    invite_link = bool(re.search(r"t\.me/\+|t\.me/joinchat|telegra\.ph", normalized))
+
+    # Однозначный спам — удаляем без разговоров
+    hard_markers = (
+        "казино", "ставк на спорт", "букмекер", "1xbet", "мостбет", "вавада",
+        "usdt", "биткоин", "bitcoin", "криптовалют", "крипто", "трейдинг", "трейдер",
+        "взаимная подписка", "взаимные подписки", "18+", "интим", "эскорт",
+        "слив курсов", "сливы курсов", "бесплатные сливы", "даркнет",
+        "легкие деньги", "лёгкие деньги", "схема заработка", "гарантированный доход",
+        "без вложений", "от 100$ в день", "удаленная подработка", "удалённая подработка",
+    )
+    if any(m in normalized for m in hard_markers):
+        return "delete"
+
+    money_markers = ("деньг", "денег", "заработ", "доход", "прибыл", "инвест",
+                     "выплат", "профит", "пассивный доход", "₽ в день", "$ в день",
+                     "руб в день", "в месяц от", "в день от")
+    dm_markers = ("в лс", "в личку", "в личны", "в директ", "пишите мне", "пиши мне",
+                  "напиши мне", "в личке", "пиши +", "жду в лс")
+    recruit_markers = ("ищу людей", "ищу человек", "в команду", "нужны люди",
+                       "набираю", "требуются", "вакансия", "подработк", "работа на дому")
+    cta_markers = ("переходи", "залетай", "жми", "подпишись", "подписывайся",
+                   "успей", "осталось мест", "свободно мест", "забирай", "кликай")
+
+    has_money = any(m in normalized for m in money_markers)
+    has_dm = any(m in normalized for m in dm_markers)
+    has_recruit = any(m in normalized for m in recruit_markers)
+    has_cta = any(m in normalized for m in cta_markers)
+
+    # Деньги + увод в ЛС / набор людей / ссылка = точный спам
+    if has_money and (has_dm or has_recruit or invite_link):
+        return "delete"
+    if has_recruit and (has_dm or invite_link):
+        return "delete"
+    if invite_link and (has_cta or has_money or has_recruit):
+        return "delete"
+
+    # Похоже на спам — просто молчим, не удаляем
+    if has_money and (has_cta or has_link):
+        return "silence"
+    if has_recruit or (has_dm and has_link):
+        return "silence"
+    if has_cta and has_link:
+        return "silence"
+    return None
+
+def is_bare_symbol_combo(text):
+    """Расшифровка в публичном чате — только короткая чистая комбинация без ссылок и спама."""
+    raw = (text or "").strip()
+    if not raw or len(raw) > 120:
+        return False
+    if re.search(r"https?://|t\.me/|@[a-z_]{4,}", raw.lower()):
+        return False
+    if classify_public_spam(raw):
+        return False
+    low = raw.lower()
+    asks_decode = any(w in low for w in ("расшифр", "розшифр", "что значит", "що означає"))
+    if asks_decode:
+        return True
+    # Разговорная фраза, а не комбинация («люблю синий цвет и число 7»)
+    chat_markers = (
+        "люблю", "нравит", "думаю", "кажется", "чувствую", "спасибо", "благодар",
+        "привет", "здравств", "желаю", "поздрав", "лучшая", "лучший", "ваш", "вы ",
+        "это моё", "это мое", "у меня в жизни", "сегодня", "вчера",
+    )
+    if any(m in low for m in chat_markers):
+        return False
+    return len(raw.split()) <= 8
+
 def is_financial_spam(text):
     """Финансовый спам с уводом в ЛС — удаляется без предупреждения."""
     normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
@@ -3158,6 +3240,34 @@ def strange_test_answers_reply(text):
     )
 
 
+def ekaterina_contact_reply(text):
+    """Просят контакт Екатерины / вход в клуб Натальи → готовый ответ."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized:
+        return None
+    # Клиент представляется сам — это не запрос контакта
+    if any(m in normalized for m in ("меня зовут", "я екатерина", "это екатерина", "с уважением")):
+        return None
+
+    has_name = "екатерин" in normalized or "катерин" in normalized or "климов" in normalized
+    asks_contact = any(m in normalized for m in (
+        "контакт", "связаться", "выйти на", "найти", "где она", "как её найти", "как ее найти",
+        "канал", "телеграм", "тг", "подписаться", "ссылк", "куда писать", "как написать",
+    ))
+    asks_club = any(m in normalized for m in (
+        "вход в клуб", "войти в клуб", "попасть в клуб", "клуб натальи",
+        "эзотерический клуб", "ezoteric", "как в клуб",
+    ))
+    if not ((has_name and asks_contact) or asks_club):
+        return None
+
+    return (
+        "ВХОД В КЛУБ НАТАЛЬИ:\n"
+        "https://ezoteric-club.lovable.app/\n\n"
+        "Подпишитесь на ТГ-канал Екатерины:\n"
+        "https://t.me/klimova_pro_ezoteriku"
+    )
+
 def installment_hot_lead_reply(text):
     """Вопрос про рассрочку/оплату частями = горячий лид → сразу к живому человеку."""
     normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
@@ -3271,6 +3381,7 @@ def predefined_reply_for_message(text):
         or reviews_reply(text)
         or meditation_link_reply(text)
         or refund_boundary_reply(text)
+        or ekaterina_contact_reply(text)
         or installment_hot_lead_reply(text)
         or contact_us_reply(text)
         or attention_drain_reply(text)
@@ -5424,14 +5535,18 @@ async def telethon_public_watcher():
         text = (event.raw_text or "").strip()
         if not text or text.startswith("/"):
             return
-        # Финансовый спам с уводом в ЛС — удаляем немедленно, без ответа
-        if is_financial_spam(text):
+        # Спам в комментариях: точный — удаляем, похожий — просто молчим
+        spam_verdict = classify_public_spam(text) or ("delete" if is_financial_spam(text) else None)
+        if spam_verdict == "delete":
             try:
                 await event.delete()
-                print(f"Financial spam deleted: msg={event.id} text={text[:80]!r}", flush=True)
+                print(f"Spam deleted: msg={event.id} text={text[:80]!r}", flush=True)
             except Exception as exc:
-                print(f"Cannot delete financial spam (нет прав администратора?): {exc}", flush=True)
-                telegram_notify_sync(f"🚨 Финансовый спам в комментариях (удалить вручную):\n{text[:300]}")
+                print(f"Cannot delete spam (нет прав администратора?): {exc}", flush=True)
+                telegram_notify_sync(f"🚨 Спам в комментариях (удалить вручную):\n{text[:300]}")
+            return
+        if spam_verdict == "silence":
+            print(f"Spam-like ignored: msg={event.id} text={text[:80]!r}", flush=True)
             return
         if not mark_public_message_processed(event.chat_id, event.id):
             print(f"Telethon public duplicate ignored: chat_id={event.chat_id}, message_id={event.id}", flush=True)
@@ -5442,7 +5557,7 @@ async def telethon_public_watcher():
             flush=True,
         )
 
-        if looks_like_symbol_decode_request(text):
+        if looks_like_symbol_decode_request(text) and is_bare_symbol_combo(text):
             reply = await asyncio.to_thread(generate_symbol_decode_reply, text, "ru")
         elif looks_like_public_question(text):
             reply = public_question_redirect_reply()
