@@ -5535,18 +5535,32 @@ async def telethon_public_watcher():
         text = (event.raw_text or "").strip()
         if not text or text.startswith("/"):
             return
+        sender_id = getattr(sender, "id", "?")
+        sender_name = (
+            getattr(sender, "first_name", None)
+            or getattr(sender, "username", None)
+            or getattr(sender, "title", None)
+            or str(sender_id)
+        )
+
         # Спам в комментариях: точный — удаляем, похожий — просто молчим
         spam_verdict = classify_public_spam(text) or ("delete" if is_financial_spam(text) else None)
         if spam_verdict == "delete":
             try:
                 await event.delete()
                 print(f"Spam deleted: msg={event.id} text={text[:80]!r}", flush=True)
+                marker = "— 🗑 СПАМ УДАЛЁН —"
             except Exception as exc:
                 print(f"Cannot delete spam (нет прав администратора?): {exc}", flush=True)
                 telegram_notify_sync(f"🚨 Спам в комментариях (удалить вручную):\n{text[:300]}")
+                marker = "— 🚨 СПАМ, УДАЛИТЬ ВРУЧНУЮ (нет прав админа) —"
+            await asyncio.to_thread(log_dialog, "Комментарии", sender_id, sender_name, text, marker)
             return
         if spam_verdict == "silence":
             print(f"Spam-like ignored: msg={event.id} text={text[:80]!r}", flush=True)
+            await asyncio.to_thread(
+                log_dialog, "Комментарии", sender_id, sender_name, text, "— 🤐 похоже на спам, молчим —"
+            )
             return
         if not mark_public_message_processed(event.chat_id, event.id):
             print(f"Telethon public duplicate ignored: chat_id={event.chat_id}, message_id={event.id}", flush=True)
@@ -5567,6 +5581,7 @@ async def telethon_public_watcher():
         try:
             await asyncio.to_thread(send_bot_message_sync, PUBLIC_DECODE_CHAT_ID, reply, event.id)
             print(f"Telethon public reply sent: message_id={event.id}", flush=True)
+            await asyncio.to_thread(log_dialog, "Комментарии", sender_id, sender_name, text, reply)
         except Exception as exc:
             print(f"Telethon public reply error: {exc}", flush=True)
 
