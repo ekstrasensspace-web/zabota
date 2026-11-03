@@ -5551,9 +5551,9 @@ async def telethon_public_watcher():
                 print(f"Spam deleted: msg={event.id} text={text[:80]!r}", flush=True)
                 marker = "— 🗑 СПАМ УДАЛЁН —"
             except Exception as exc:
-                print(f"Cannot delete spam (нет прав администратора?): {exc}", flush=True)
-                telegram_notify_sync(f"🚨 Спам в комментариях (удалить вручную):\n{text[:300]}")
-                marker = "— 🚨 СПАМ, УДАЛИТЬ ВРУЧНУЮ (нет прав админа) —"
+                # Обычно сообщение уже стёрли другие боты-модераторы — это не повод будить людей
+                print(f"Spam delete skipped (уже удалено или нет прав): {exc}", flush=True)
+                marker = "— 🤐 спам, Роза промолчала (удалял другой бот) —"
             await asyncio.to_thread(log_dialog, "Комментарии", sender_id, sender_name, text, marker)
             return
         if spam_verdict == "silence":
