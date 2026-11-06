@@ -2425,11 +2425,16 @@ def classify_public_spam(text):
 
     money_markers = ("деньг", "денег", "заработ", "доход", "прибыл", "инвест",
                      "выплат", "профит", "пассивный доход", "₽ в день", "$ в день",
-                     "руб в день", "в месяц от", "в день от")
+                     "руб в день", "в месяц от", "в день от",
+                     "оплачу", "оплата сразу", "оплата по факту", "по окончанию",
+                     "оплата наличными", "плачу сразу")
     dm_markers = ("в лс", "в личку", "в личны", "в директ", "пишите мне", "пиши мне",
                   "напиши мне", "в личке", "пиши +", "жду в лс")
     recruit_markers = ("ищу людей", "ищу человек", "в команду", "нужны люди",
-                       "набираю", "требуются", "вакансия", "подработк", "работа на дому")
+                       "набираю", "требуются", "вакансия", "подработк", "работа на дому",
+                       "разгрузк", "погрузк", "грузчик", "помочь завтра", "помочь с ",
+                       "нужен помощник", "нужна помощница", "помогите с переездом",
+                       "на пару часов", "несколько часов работы")
     cta_markers = ("переходи", "залетай", "жми", "подпишись", "подписывайся",
                    "успей", "осталось мест", "свободно мест", "забирай", "кликай")
 
@@ -3876,7 +3881,10 @@ def looks_like_symbol_decode_request(text):
         re.search(r"(^|[^\w])\d{1,2}([^\w]|$)", normalized) is not None
         or any(word in normalized for word in NUMBER_WORDS)
     )
-    has_symbol = any(word in normalized for word in SYMBOL_WORDS)
+    has_symbol = any(
+        re.search(r"\b" + re.escape(word) + r"\w{0,3}\b", normalized)
+        for word in SYMBOL_WORDS
+    )
     has_separator = "," in normalized or "\n" in text or ";" in normalized
     asks_decode = any(word in normalized for word in ("расшифр", "розшифр", "что значит", "що означає"))
     # Только отдельные слова (\b): иначе «проЦВЕТания» ловилось как «цвет»
@@ -5844,9 +5852,29 @@ async def handle_public_symbol_decode(update: Update, context: ContextTypes.DEFA
         print(f"Telegram public duplicate ignored: chat_id={chat.id}, message_id={message.message_id}", flush=True)
         return
 
-    if looks_like_symbol_decode_request(user_message):
+    sender_name = message.from_user.first_name or message.from_user.username or str(message.from_user.id)
+    sender_id = message.from_user.id
+
+    # Спам в комментариях: точный — пытаемся удалить, похожий — просто молчим
+    spam_verdict = classify_public_spam(user_message) or (
+        "delete" if is_financial_spam(user_message) else None
+    )
+    if spam_verdict:
+        marker = "— 🤐 спам, Роза промолчала —"
+        if spam_verdict == "delete":
+            try:
+                await message.delete()
+                marker = "— 🗑 СПАМ УДАЛЁН —"
+            except Exception as exc:
+                print(f"Spam delete skipped (уже удалено или нет прав): {exc}", flush=True)
+        print(f"Public spam [{spam_verdict}] ignored: {user_message[:80]!r}", flush=True)
+        log_dialog("Комментарии", sender_id, sender_name, user_message, marker)
+        return
+
+    if looks_like_symbol_decode_request(user_message) and is_bare_symbol_combo(user_message):
         reply = generate_symbol_decode_reply(user_message, language="ru")
         await reply_text_chunks(message, reply)
+        log_dialog("Комментарии", sender_id, sender_name, user_message, reply)
 
         try:
             await context.bot.send_message(
