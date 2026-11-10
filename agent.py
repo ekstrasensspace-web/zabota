@@ -2483,6 +2483,91 @@ def is_bare_symbol_combo(text):
         return False
     return len(raw.split()) <= 8
 
+# ============================================================
+# СПРАВОЧНИК 72 АНГЕЛОВ (курс «Магия ангелов», ступень I)
+# ============================================================
+import json as _json
+
+ANGELS_72 = []
+ANGEL_BY_DATE = {}
+try:
+    with open(os.path.join(BASE_DIR, "angels_72.json"), encoding="utf-8") as _f:
+        ANGELS_72 = _json.load(_f)
+    for _a in ANGELS_72:
+        for _mo, _d in _a.get("soul_dates", []):
+            ANGEL_BY_DATE[(int(_mo), int(_d))] = _a
+    print(f"Справочник ангелов загружен: {len(ANGELS_72)} ангелов, {len(ANGEL_BY_DATE)} дат", flush=True)
+except Exception as _e:
+    print(f"Не удалось загрузить справочник ангелов: {_e}", flush=True)
+
+ANGEL_TEST_LINK = "https://sverhsposobnosti.com"
+_ANGEL_MONTHS = {
+    "янв": 1, "фев": 2, "мар": 3, "апр": 4, "май": 5, "мая": 5, "июн": 6,
+    "июл": 7, "авг": 8, "сен": 9, "окт": 10, "ноя": 11, "дек": 12,
+}
+
+def parse_birth_date(text):
+    """Достаём дату рождения из сообщения. Возвращает (месяц, день) или None."""
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    # 16.05.1965 / 16-05-1965 / 16/05/65
+    m = re.search(r"\b(\d{1,2})[.\-/](\d{1,2})(?:[.\-/](\d{2,4}))?\b", raw)
+    if m:
+        day, mon = int(m.group(1)), int(m.group(2))
+        if 1 <= day <= 31 and 1 <= mon <= 12:
+            return (mon, day)
+    # 16 мая 1965 / 3 января
+    m = re.search(r"\b(\d{1,2})\s+([а-яё]{3,})", raw.lower())
+    if m:
+        day = int(m.group(1))
+        mon = _ANGEL_MONTHS.get(m.group(2)[:3])
+        if mon and 1 <= day <= 31:
+            return (mon, day)
+    return None
+
+def angel_of_soul_reply(text):
+    """«Пожалуйста ангела 16.05.1965» → Ангел Души по справочнику."""
+    normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not normalized or "ангел" not in normalized:
+        return None
+    # Вопросы про курс, а не про личного ангела — пусть отвечает AI
+    course_markers = (
+        "курс", "стоимость", "сколько стоит", "цена", "купить", "оплат", "ступен",
+        "расписание", "когда старт", "когда начало", "программа", "тариф", "рассрочк",
+    )
+    if any(m in normalized for m in course_markers):
+        return None
+
+    date = parse_birth_date(text)
+    if not date:
+        return None
+    mon, day = date
+
+    if (mon, day) == (2, 29):
+        return (
+            "Добрый день 🌸 29 февраля — особый случай: у рождённых в этот день "
+            "свой собственный гений, его разбирают отдельно.\n\n"
+            f"Пройди полный тест 👉 {ANGEL_TEST_LINK}"
+        )
+    if mon == 3 and 15 <= day <= 19:
+        return (
+            "Добрый день 🌸 15–19 марта — эпагоменальные дни, ими правят особые гении, "
+            "они стоят вне круга 72 ангелов.\n\n"
+            f"Пройди полный тест 👉 {ANGEL_TEST_LINK}"
+        )
+
+    angel = ANGEL_BY_DATE.get((mon, day))
+    if not angel:
+        return None
+    title = angel["title"]
+    title = title[0].lower() + title[1:] if title else ""
+    return (
+        f"Добрый день 🌸 Твой Ангел Души — {angel['name']}, {title} ✨\n\n"
+        f"{angel['gives']}\n\n"
+        f"Пройди полный тест 👉 {ANGEL_TEST_LINK}"
+    )
+
 def is_financial_spam(text):
     """Финансовый спам с уводом в ЛС — удаляется без предупреждения."""
     normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
@@ -3381,7 +3466,8 @@ def meditation_link_reply(text):
 
 def predefined_reply_for_message(text):
     return (
-        devaluation_boundary_reply(text)
+        angel_of_soul_reply(text)
+        or devaluation_boundary_reply(text)
         or other_path_farewell_reply(text)
         or reviews_reply(text)
         or meditation_link_reply(text)
@@ -5579,7 +5665,10 @@ async def telethon_public_watcher():
             flush=True,
         )
 
-        if looks_like_symbol_decode_request(text) and is_bare_symbol_combo(text):
+        angel_reply = angel_of_soul_reply(text)
+        if angel_reply:
+            reply = angel_reply
+        elif looks_like_symbol_decode_request(text) and is_bare_symbol_combo(text):
             reply = await asyncio.to_thread(generate_symbol_decode_reply, text, "ru")
         elif looks_like_public_question(text):
             reply = public_question_redirect_reply()
@@ -5869,6 +5958,19 @@ async def handle_public_symbol_decode(update: Update, context: ContextTypes.DEFA
                 print(f"Spam delete skipped (уже удалено или нет прав): {exc}", flush=True)
         print(f"Public spam [{spam_verdict}] ignored: {user_message[:80]!r}", flush=True)
         log_dialog("Комментарии", sender_id, sender_name, user_message, marker)
+        return
+
+    angel_reply = angel_of_soul_reply(user_message)
+    if angel_reply:
+        await reply_text_chunks(message, angel_reply)
+        log_dialog("Комментарии", sender_id, sender_name, user_message, angel_reply)
+        try:
+            await context.bot.send_message(
+                chat_id=LOG_CHANNEL_ID,
+                text=(f"👼 Ангел Души — {chat.title or chat.id}:\n{user_message}\n\n{angel_reply}")[:3900],
+            )
+        except Exception:
+            pass
         return
 
     if looks_like_symbol_decode_request(user_message) and is_bare_symbol_combo(user_message):
