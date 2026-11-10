@@ -5088,6 +5088,19 @@ def test_ai_endpoint():
     salebot_key = os.environ.get("SALEBOT_API_KEY", "")
     results.append(f"<b>SALEBOT_API_KEY:</b> {'✅ задан (' + salebot_key[:8] + '...)' if salebot_key else '❌ НЕ ЗАДАН'}")
 
+    # Справочник 72 ангелов
+    if ANGELS_72 and len(ANGEL_BY_DATE) == 360:
+        _probe = angel_of_soul_reply("ангел 16.05.1965")
+        _first = (_probe or "").splitlines()[0] if _probe else "— нет ответа —"
+        results.append(
+            f"<b>Справочник ангелов:</b> ✅ {len(ANGELS_72)} ангелов, {len(ANGEL_BY_DATE)} дат"
+            f"<br><small>проба 16.05 → {_first}</small>"
+        )
+    else:
+        results.append(
+            f"<b>Справочник ангелов:</b> ❌ загружено {len(ANGELS_72)} ангелов, {len(ANGEL_BY_DATE)} дат (ожидалось 72/360)"
+        )
+
     # Тест Groq
     if GROQ_API_KEY:
         try:
