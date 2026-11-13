@@ -2517,6 +2517,12 @@ def parse_birth_date(text):
         day, mon = int(m.group(1)), int(m.group(2))
         if 1 <= day <= 31 and 1 <= mon <= 12:
             return (mon, day)
+    # 21 02 1959 — через пробелы; год обязателен, иначе это просто два числа
+    m = re.search(r"\b(\d{1,2})\s+(\d{1,2})\s+(\d{4})\b", raw)
+    if m:
+        day, mon = int(m.group(1)), int(m.group(2))
+        if 1 <= day <= 31 and 1 <= mon <= 12:
+            return (mon, day)
     # 16 мая 1965 / 3 января
     m = re.search(r"\b(\d{1,2})\s+([а-яё]{3,})", raw.lower())
     if m:
@@ -2526,10 +2532,42 @@ def parse_birth_date(text):
             return (mon, day)
     return None
 
+_ANGEL_BARE_STOP_MARKERS = (
+    "оплат", "платеж", "платёж", "перевод", "счет", "счёт", "чек", "возврат", "скидк",
+    "рассрочк", "доступ", "эфир", "вебинар", "зум", "zoom", "занятие", "урок", "запись",
+    "марафон", "ступен", "клуб", "вебинар", "ссылк", "пароль", "логин", "почт",
+)
+_ANGEL_BARE_FILLER = re.compile(
+    r"(добр[ыоа]\w*|утр\w*|день|дня|вечер\w*|ночи|здравствуйте|привет|спасибо|благодарю|"
+    r"пожалуйста|мо[яиё]\w*|дата|рождени\w*|др|г|год\w*|в|р|люблю|наталья|наталия)",
+    re.IGNORECASE,
+)
+
+def _looks_like_bare_birth_date(text):
+    """Человек прислал просто дату в ответ на просьбу — это запрос ангела, слово «ангел» не нужно."""
+    raw = (text or "").strip()
+    if len(raw) > 90:
+        return False
+    low = raw.lower()
+    if any(m in low for m in _ANGEL_BARE_STOP_MARKERS):
+        return False
+    # Нужен четырёхзначный год рождения — он отличает дату рождения от даты события
+    year = re.search(r"\b(19\d{2}|20[0-1]\d)\b", raw)
+    if not year:
+        return False
+    # Убираем саму дату и вежливые слова — должно почти ничего не остаться
+    rest = re.sub(r"[\d.\-/:]+", " ", low)
+    rest = _ANGEL_BARE_FILLER.sub(" ", rest)
+    rest = re.sub(r"[^\w\s]", " ", rest, flags=re.UNICODE)
+    words = [w for w in rest.split() if len(w) > 1]
+    return len(words) <= 2
+
 def angel_of_soul_reply(text):
     """«Пожалуйста ангела 16.05.1965» → Ангел Души по справочнику."""
     normalized = re.sub(r"\s+", " ", (text or "").lower()).strip()
-    if not normalized or "ангел" not in normalized:
+    if not normalized:
+        return None
+    if "ангел" not in normalized and not _looks_like_bare_birth_date(text):
         return None
     # Вопросы про курс, а не про личного ангела — пусть отвечает AI
     course_markers = (
@@ -2562,8 +2600,10 @@ def angel_of_soul_reply(text):
         return None
     title = angel["title"]
     title = title[0].lower() + title[1:] if title else ""
+    # В каноне есть одноимённые ангелы (Лавия II, Михаэль II) — римская цифра не для клиента
+    name = re.sub(r"\s+(?:i{1,3}|iv|v)$", "", angel["name"].strip(), flags=re.IGNORECASE)
     return (
-        f"Добрый день 🌸 Твой Ангел Души — {angel['name']}, {title} ✨\n\n"
+        f"Добрый день 🌸 Твой Ангел Души — {name}, {title} ✨\n\n"
         "Это только первый слой. В полном тесте — в чём твоя сила, где теневая сторона "
         f"и как с ним работать 👉 {ANGEL_TEST_LINK}"
     )
