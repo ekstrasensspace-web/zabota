@@ -1772,12 +1772,9 @@ def should_compact_groq_prompt(system_prompt):
 
 # Порядок — по качеству ответа. Если Groq снимет первую, бот сам перейдёт к следующей.
 GROQ_MODELS = (
-    "llama-3.3-70b-versatile",
     "openai/gpt-oss-120b",
-    "moonshotai/kimi-k2-instruct",
-    "qwen/qwen3-32b",
-    "llama-3.1-8b-instant",
-    "groq/compound",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.8-27b",
 )
 
 def _call_groq_model(model, system_prompt, user_message, max_tokens, headers, url):
@@ -1807,7 +1804,11 @@ def _call_groq_model(model, system_prompt, user_message, max_tokens, headers, ur
                 print(f"Groq {model} недоступна ({resp.status_code}) — пробуем следующую", flush=True)
                 return None
             resp.raise_for_status()
-            text = resp.json()["choices"][0]["message"]["content"]
+            text = resp.json()["choices"][0]["message"].get("content") or ""
+            if not text.strip():
+                # Рассуждающие модели иногда отдают пустой content — считаем это отказом
+                print(f"Groq {model} вернул пустой ответ — пробуем следующую", flush=True)
+                return None
             print(f"Groq {model} ответил успешно (попытка {attempt+1})", flush=True)
             return text
         except Exception as exc:
@@ -5160,12 +5161,19 @@ def test_ai_endpoint():
                 resp = requests.post(
                     "https://api.groq.com/openai/v1/chat/completions",
                     headers=groq_headers,
-                    json={"model": model, "messages": [{"role": "user", "content": "Скажи: работает"}], "max_tokens": 20},
-                    timeout=15,
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": "Ответь одним предложением: ты работаешь?"}],
+                        "max_tokens": 400,
+                    },
+                    timeout=25,
                 )
                 if resp.status_code == 200:
-                    text = resp.json()["choices"][0]["message"]["content"]
-                    results.append(f"<b>Groq [{model}]:</b> ✅ ответил: <i>{text[:120]}</i>")
+                    text = (resp.json()["choices"][0]["message"].get("content") or "").strip()
+                    if text:
+                        results.append(f"<b>Groq [{model}]:</b> ✅ ответил: <i>{text[:160]}</i>")
+                    else:
+                        results.append(f"<b>Groq [{model}]:</b> ⚠️ HTTP 200, но пустой ответ")
                 else:
                     results.append(f"<b>Groq [{model}]:</b> ❌ HTTP {resp.status_code}: {resp.text[:140]}")
             except Exception as e:
