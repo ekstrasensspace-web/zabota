@@ -1770,6 +1770,16 @@ def should_compact_groq_prompt(system_prompt):
         or "ПРАВИЛА ПОВЕДЕНИЯ:" in prompt
     )
 
+# Порядок — по качеству ответа. Если Groq снимет первую, бот сам перейдёт к следующей.
+GROQ_MODELS = (
+    "llama-3.3-70b-versatile",
+    "openai/gpt-oss-120b",
+    "moonshotai/kimi-k2-instruct",
+    "qwen/qwen3-32b",
+    "llama-3.1-8b-instant",
+    "groq/compound",
+)
+
 def _call_groq_model(model, system_prompt, user_message, max_tokens, headers, url):
     """Один вызов Groq с заданной моделью, 3 попытки при 429."""
     groq_system = system_prompt[:42000] if len(system_prompt) > 42000 else system_prompt
@@ -1791,6 +1801,10 @@ def _call_groq_model(model, system_prompt, user_message, max_tokens, headers, ur
                 if attempt < 2:
                     time.sleep(wait)
                     continue
+                return None
+            if resp.status_code in (400, 404):
+                # Модель снята с обслуживания или переименована — повторять бессмысленно
+                print(f"Groq {model} недоступна ({resp.status_code}) — пробуем следующую", flush=True)
                 return None
             resp.raise_for_status()
             text = resp.json()["choices"][0]["message"]["content"]
@@ -1816,17 +1830,14 @@ def call_groq(system_prompt, user_message, max_tokens=1024):
         if should_compact_groq_prompt(system_prompt)
         else system_prompt
     )
-    # Основная модель — высокое качество, но 12K токенов в минуту
-    result = _call_groq_model("llama-3.3-70b-versatile", groq_system_prompt, user_message, max_tokens, headers, url)
-    if result:
-        _ai_stat_bump("groq")
-        return result
-    # Фолбек — groq/compound: 70K TPM, выдерживает одновременные запросы
-    print("Groq llama перегружен — пробуем groq/compound...", flush=True)
-    result = _call_groq_model("groq/compound", groq_system_prompt, user_message, max_tokens, headers, url)
-    if result:
-        _ai_stat_bump("groq")
-        return result
+    # Идём по списку: первая живая модель отвечает. Groq снимает модели с обслуживания
+    # без предупреждения, поэтому одной захардкоженной модели мало.
+    for model in GROQ_MODELS:
+        result = _call_groq_model(model, groq_system_prompt, user_message, max_tokens, headers, url)
+        if result:
+            _ai_stat_bump("groq")
+            return result
+    print("Groq: ни одна модель из списка не ответила", flush=True)
     return None
 
 
@@ -5141,22 +5152,34 @@ def test_ai_endpoint():
             f"<b>Справочник ангелов:</b> ❌ загружено {len(ANGELS_72)} ангелов, {len(ANGEL_BY_DATE)} дат (ожидалось 72/360)"
         )
 
-    # Тест Groq
+    # Тест Groq: пробуем каждую модель из списка и показываем, какие вообще живы
     if GROQ_API_KEY:
+        groq_headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+        for model in GROQ_MODELS:
+            try:
+                resp = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers=groq_headers,
+                    json={"model": model, "messages": [{"role": "user", "content": "Скажи: работает"}], "max_tokens": 20},
+                    timeout=15,
+                )
+                if resp.status_code == 200:
+                    text = resp.json()["choices"][0]["message"]["content"]
+                    results.append(f"<b>Groq [{model}]:</b> ✅ ответил: <i>{text[:120]}</i>")
+                else:
+                    results.append(f"<b>Groq [{model}]:</b> ❌ HTTP {resp.status_code}: {resp.text[:140]}")
+            except Exception as e:
+                results.append(f"<b>Groq [{model}]:</b> ❌ Exception: {e}")
+        # Что Groq вообще отдаёт по этому ключу — чтобы не гадать с именами моделей
         try:
-            resp = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-                json={"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": "Скажи: работает"}], "max_tokens": 20},
-                timeout=15
-            )
-            if resp.status_code == 200:
-                text = resp.json()["choices"][0]["message"]["content"]
-                results.append(f"<b>Groq [llama-3.3-70b]:</b> ✅ ответил: <i>{text[:200]}</i>")
+            lst = requests.get("https://api.groq.com/openai/v1/models", headers=groq_headers, timeout=15)
+            if lst.status_code == 200:
+                ids = sorted(m.get("id", "?") for m in lst.json().get("data", []))
+                results.append("<b>Groq, доступные модели:</b> " + ", ".join(ids))
             else:
-                results.append(f"<b>Groq:</b> ❌ HTTP {resp.status_code}: {resp.text[:200]}")
+                results.append(f"<b>Groq, список моделей:</b> ❌ HTTP {lst.status_code}")
         except Exception as e:
-            results.append(f"<b>Groq:</b> ❌ Exception: {e}")
+            results.append(f"<b>Groq, список моделей:</b> ❌ {e}")
     else:
         results.append("<b>Groq:</b> ⏭️ ключ не задан — добавьте GROQ_API_KEY в Railway")
 
